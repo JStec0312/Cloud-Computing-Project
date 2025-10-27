@@ -1,0 +1,7 @@
+fastapi
+slowapi
+uvicorn[standard]
+pydantic
+alembic
+sqlalchemy
+psycopg2-binary

@@ -1,0 +1,31 @@
+from __future__ import annotations
+import uuid
+from typing import TYPE_CHECKING, Optional, List
+from sqlalchemy import String, TIMESTAMP, text
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from src.database.core import Base
+
+if TYPE_CHECKING:
+    from src.entities.session import Session
+    from src.entities.file import File
+    from src.entities.file_version import FileVersion
+    from src.entities.package import Package
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    display_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[Optional[str]] = mapped_column(TIMESTAMP(timezone=False), server_default=text("now()"))
+
+    # reverse relacje
+    sessions: Mapped[List["Session"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    owned_files: Mapped[List["File"]] = relationship(back_populates="owner")
+    uploaded_versions: Mapped[List["FileVersion"]] = relationship(back_populates="uploader", cascade="all, delete-orphan")
+    packages_created: Mapped[List["Package"]] = relationship(back_populates="creator")
+
+    def __repr__(self) -> str:
+        return f"User(id={self.id}, email={self.email})"
