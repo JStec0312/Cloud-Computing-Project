@@ -3,18 +3,15 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 from alembic import context
-from src.database.core import Base
+from src.infrastructure.db.base import Base
 
  
-from src.entities.blob import Blob
-from src.entities.user import User
-from src.entities.file_version import FileVersion
-from src.entities.file import File
-from src.entities.logbook import LogBook
-from src.entities.package import Package
-from src.entities.package_item import PackageItem
-from src.entities.refresh_token import RefreshToken
-from src.entities.session import Session
+from src.domain.entities.blob import Blob
+from src.domain.entities.user import User
+from src.domain.entities.package import Package
+from src.domain.entities.package_item import PackageItem
+from src.domain.entities.refresh_token import RefreshToken
+from src.domain.entities.session import Session
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

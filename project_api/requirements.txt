@@ -9,3 +9,5 @@ psycopg2-binary
 asyncpg
 asyncio
 argon2-cffi
+jwt
+python-jose[cryptography]
