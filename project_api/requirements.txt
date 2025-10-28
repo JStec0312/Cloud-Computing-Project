@@ -2,6 +2,10 @@ fastapi
 slowapi
 uvicorn[standard]
 pydantic
+pydantic[email]
 alembic
 sqlalchemy
 psycopg2-binary
+asyncpg
+asyncio
+argon2-cffi

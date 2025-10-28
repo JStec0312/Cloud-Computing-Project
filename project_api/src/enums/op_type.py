@@ -1,10 +1,11 @@
 import enum
 
 class OpType(enum.Enum):
-    login = "login"
-    logout = "logout"
-    upload = "upload"
-    download = "download"
-    list_files = "list_files"
-    package_create = "package_create"
-    package_download = "package_download"
+    LOGIN = "login"
+    LOGOUT = "logout"
+    UPLOAD = "upload"
+    DOWNLOAD = "download"
+    LIST_FILES = "list_files"
+    PACKAGE_CREATE = "package_create"
+    PACKAGE_DOWNLOAD = "package_download"
+    USER_REGISTER = "user_register"

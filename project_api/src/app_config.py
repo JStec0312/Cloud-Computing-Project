@@ -7,7 +7,14 @@ class Settings(BaseSettings):
     db_name: str
     db_host: str 
     db_port: int 
-    app_port: int 
+    app_port: int
+    # JWT Settings
+    jwt_secret: str
+    jwt_algorithm: str
+    jwt_expiration_minutes: int 
+    jwt_refresh_expiration_days: int
+
+    
 
     
     def dsn_async(self) -> str:
