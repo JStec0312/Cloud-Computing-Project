@@ -19,5 +19,8 @@ class LoginUserRequest(BaseModel):
 class LoginUserResponse(BaseModel):
     user: RegisterUserResponse
     access_token: str
-    refresh_token: str
     model_config = ConfigDict(from_attributes=True)
+
+
+class RefreshTokenResponse(LoginUserResponse):
+    pass

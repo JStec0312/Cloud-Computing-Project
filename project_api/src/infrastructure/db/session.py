@@ -3,9 +3,8 @@ from __future__ import annotations  # (opcjonalnie, wtedy adnotacje nie są ewal
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 
-from src.config.app_config import Settings
+from src.config.app_config import settings
 
-settings = Settings()
 DATABASE_URL = settings.dsn_async()
 
 engine = create_async_engine(DATABASE_URL, echo=False, pool_pre_ping=True)

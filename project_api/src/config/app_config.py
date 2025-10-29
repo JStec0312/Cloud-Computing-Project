@@ -13,10 +13,17 @@ class Settings(BaseSettings):
     jwt_algorithm: str
     jwt_expiration_minutes: int 
     jwt_refresh_expiration_days: int
+    token_pepper: str
+    #cookies
+    refresh_cookie_name: str = "refresh_token"
+    httponly_cookie: bool = True
+    secure_cookie: bool = False
+    samesite_cookie: str = "Lax"
 
-    
+    cookie_refresh_path: str = "/auth/refresh"
 
-    
+    max_age_cookie: int = 30 * 24 * 60 * 60  # 30 days in seconds
+
     def dsn_async(self) -> str:
         return f"postgresql+asyncpg://{self.db_user}:{self.db_pass}@{self.db_host}:{self.db_port}/{self.db_name}"
 

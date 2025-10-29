@@ -8,13 +8,6 @@ from src.infrastructure.repositories.session_repo import SessionRepo
 from src.infrastructure.repositories.refresh_token_repo import RefreshTokenRepo
 
 class SqlAlchemyUoW:
-    """
-    Każda instancja UoW:
-    - otwiera AsyncSession,
-    - zaczyna transakcję w __aenter__,
-    - daje dostęp do repo w ramach tej sesji,
-    - commit/rollback po stronie warstwy application (use-case).
-    """
     def __init__(
         self,
         session_factory: async_sessionmaker[AsyncSession],
@@ -50,11 +43,9 @@ class SqlAlchemyUoW:
         try:
             await self._tx.__aexit__(exc_type, exc, tb)
         finally:
-            # zamknij sesję zawsze
             await self.session.close()  # type: ignore[union-attr]
 
     async def commit(self) -> None:
-        # flush -> commit, jeśli chcesz stricte kontrolować flush
         await self.session.flush()   # type: ignore[union-attr]
         await self.session.commit()  # type: ignore[union-attr]
 

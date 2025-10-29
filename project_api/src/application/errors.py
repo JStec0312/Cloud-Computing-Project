@@ -15,3 +15,12 @@ class UserNotFoundError(UserError):
 class InvalidCredentialsError(UserError):
     def __init__(self):
         super().__init__(status_code=401, detail="Invalid email or password.")
+
+class RefreshTokenError(Exception):
+    def __init__(self, status_code: int, detail: str):
+        self.status_code = status_code
+        self.detail = detail
+        
+class RefreshTokenMissingError(RefreshTokenError):
+    def __init__(self, detail: str = "Refresh token is missing"):
+        super().__init__(status_code=401, detail=detail)

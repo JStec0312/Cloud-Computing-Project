@@ -1,13 +1,25 @@
-from fastapi import APIRouter
-
+from fastapi import APIRouter, Depends
+from fastapi import Request
+from src.api.deps import get_uow
+from src.api.schemas.files import UploadFileRequest
+from src.infrastructure.uow import SqlAlchemyUoW
+from src.application.file_service import FileService
+from src.api.deps import get_filesvc as get_file_service
 router = APIRouter(
     prefix="/files",
     tags=["files"],
 )
 
-@router.post("/")
-async def upload_file():
-    pass
+@router.post("/", status_code=201)
+async def upload_file(
+    body: UploadFileRequest,
+    request: Request,
+    uow: SqlAlchemyUoW = Depends(get_uow),
+    filesvc: FileService = Depends(get_file_service)
+
+
+):
+    return filesvc.do_something(body, request)
 
 @router.get("/")
 async def get_user_files():
