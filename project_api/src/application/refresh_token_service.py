@@ -5,6 +5,8 @@ from src.infrastructure.uow import SqlAlchemyUoW
 import uuid
 import datetime
 from src.infrastructure.security.token_hasher import TokenHasher
+from src.common.utils.time_utils import utcnow, timedelta_days
+from src.config.app_config import settings
 
 class RefreshTokenService:
     def __init__(self, hasher: TokenHasher):
@@ -91,3 +93,25 @@ class RefreshTokenService:
         await uow.refresh_token.revoke_by_id(
             token_id=token_id,
         )
+
+    async def rotate(
+            self,
+            uow: SqlAlchemyUoW,
+            *,
+            old_rt: RefreshToken,
+            new_hash: str,
+            ip: str,
+            user_agent: str,
+    ) -> None:
+        await self.revoke_token_by_id(
+            uow,
+            token_id=old_rt.id,
+        )
+        new_rt = RefreshToken(
+            user_id=old_rt.user_id,
+            session_id=old_rt.session_id,
+            revoked_id=old_rt.id,
+            token_hash=new_hash,
+            expires_at=timedelta_days(settings.jwt_refresh_expiration_days)
+        )
+        await uow.refresh_token.add(new_rt)

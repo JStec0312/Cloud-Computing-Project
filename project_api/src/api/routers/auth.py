@@ -83,7 +83,7 @@ async def refresh_token_ep(
             raise RefreshTokenMissingError(detail="Refresh token cookie is missing")
         user, access_token, new_refresh_token = await auth.refresh_tokens(
             uow,
-            token_hash=refresh_token_cookie,
+            token=refresh_token_cookie,
             ip=request.client.host,
             user_agent=request.headers.get("User-Agent", ""),
         )

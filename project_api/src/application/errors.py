@@ -24,3 +24,20 @@ class RefreshTokenError(Exception):
 class RefreshTokenMissingError(RefreshTokenError):
     def __init__(self, detail: str = "Refresh token is missing"):
         super().__init__(status_code=401, detail=detail)
+        
+class MissingAccessTokenError(Exception):
+    def __init__(self, detail: str = "Access token is missing"):
+        self.status_code = 401
+        self.detail = detail
+        
+class TokenExpiredError(Exception):
+    def __init__(self, detail: str = "Token has expired"):
+        self.status_code = 401
+        self.detail = detail
+        
+class InvalidTokenError(Exception):
+    def __init__(self, detail: str = "Invalid token"):
+        self.status_code = 401
+        self.detail = detail
+        
+        
