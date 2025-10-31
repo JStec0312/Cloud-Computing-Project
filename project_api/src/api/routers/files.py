@@ -21,8 +21,7 @@ async def upload_file(
     return filesvc.do_something(body, request)
 
 @router.get("/")
-async def get_user_files(current_user = Depends(current_user), x_request_id: Annotated[str | None, Header(alias="X-Request-Id")] = None
- ):
+async def get_user_files(current_user = Depends(current_user)):
     return {"message": f"Files for user {current_user.id}"}
 
 @router.patch("/{file_id}/rename")

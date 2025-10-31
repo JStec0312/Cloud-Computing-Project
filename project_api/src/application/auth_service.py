@@ -181,7 +181,13 @@ class AuthService:
 
 				await self._refresh_token_svc.rotate(uow, old_rt=rt, new_hash=new_refresh_hash, ip=ip, user_agent=user_agent)
 				new_access = create_access_token(user_id=user.id)
-
+				uow.logbook.register_log(
+					op_type=OpType.REFRESH_TOKEN,
+					user_id=user.id,
+					remote_addr=ip,
+					user_agent=user_agent,
+					details={"success": True},
+				)
 				await uow.commit()
 				return user, new_access, new_refresh_raw
 	

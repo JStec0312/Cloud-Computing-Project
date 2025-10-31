@@ -9,3 +9,4 @@ class OpType(enum.Enum):
     PACKAGE_CREATE = "package_create"
     PACKAGE_DOWNLOAD = "package_download"
     USER_REGISTER = "user_register"
+    REFRESH_TOKEN="refresh_token"
