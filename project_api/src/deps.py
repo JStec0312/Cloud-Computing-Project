@@ -44,7 +44,10 @@ def get_auth_service(
 ):
     return AuthService(hasher, logsvc, refresh_token_svc, session_svc, token_hasher)
 
+def get_storage():
+    from src.infrastructure.storage.LocalBlobStorage import LocalBlobStorage
+    return LocalBlobStorage(settings.local_storage_path)
 
-def get_filesvc():
-    return FileService(logsvc = get_logsvc())
 
+def get_filesvc(logsvc: LogbookService = Depends(get_logsvc), storage = Depends(get_storage)):
+    return FileService(logsvc, storage)

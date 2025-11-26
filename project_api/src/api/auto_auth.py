@@ -4,7 +4,7 @@ from fastapi import Depends, Request, Response, HTTPException, status
 from src.application.errors import (InvalidCredentialsError, MissingAccessTokenError,
     RefreshTokenError)
 from src.infrastructure.uow import SqlAlchemyUoW
-from src.api.deps import get_auth_service, get_uow
+from src.deps import get_auth_service, get_uow
 from src.application.auth_service import AuthService
 from src.config.app_config import settings
 from src.domain.entities.user import User

@@ -24,6 +24,9 @@ class Settings(BaseSettings):
 
     max_age_cookie: int = 30 * 24 * 60 * 60  # 30 days in seconds
 
+    # Local storage path
+    local_storage_path:str = "./local_storage_data"
+
     def dsn_async(self) -> str:
         return f"postgresql+asyncpg://{self.db_user}:{self.db_pass}@{self.db_host}:{self.db_port}/{self.db_name}"
 

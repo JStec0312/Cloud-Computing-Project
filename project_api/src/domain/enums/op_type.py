@@ -10,3 +10,4 @@ class OpType(enum.Enum):
     PACKAGE_DOWNLOAD = "package_download"
     USER_REGISTER = "user_register"
     REFRESH_TOKEN="refresh_token"
+    FILE_UPLOAD_ATTEMPT="file_upload_attempt"

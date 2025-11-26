@@ -39,5 +39,10 @@ class InvalidTokenError(Exception):
     def __init__(self, detail: str = "Invalid token"):
         self.status_code = 401
         self.detail = detail
+
+class InvalidParentFolder(Exception):
+    def __init__(self, folder_id: str):
+        self.status_code = 404
+        self.detail = f"Parent folder with id {folder_id} not found."
         
         

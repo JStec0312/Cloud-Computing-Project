@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, Asyn
 from sqlalchemy.pool import StaticPool
 
 from src.api.app import app
-from src.api.deps import get_uow, get_auth_service  
+from src.deps import get_uow, get_auth_service  
 from src.infrastructure.uow import SqlAlchemyUoW
 from src.infrastructure.db import Base 
 from src.domain.entities.user import User

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 import logging
-from src.api.deps import get_uow, get_auth_service
+from src.deps import get_uow, get_auth_service
 from src.application.errors import (InvalidCredentialsError, RefreshTokenError,
     RefreshTokenMissingError, UserAlreadyExistsError, UserNotFoundError)
 from src.application.auth_service import AuthService

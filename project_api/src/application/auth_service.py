@@ -152,6 +152,15 @@ class AuthService:
 					revoked_id=None,
 					expires_at=timedelta_days(settings.jwt_refresh_expiration_days),
 				)
+				await self._logsvc.register_log(
+					uow,
+					op_type=OpType.LOGIN,
+					user_id=user.id,
+					remote_addr=ip,
+					user_agent=user_agent,
+					details={"email": email_norm, "success": True},
+
+				)
 				await uow.commit()
 		except Exception as e:
 			await uow.rollback()
@@ -161,6 +170,14 @@ class AuthService:
 
 	async def refresh_tokens(self, uow: SqlAlchemyUoW, *, token: str, ip: str, user_agent: str):
 			if not token:
+				await self._logsvc.register_log(
+					uow,
+					op_type=OpType.REFRESH_TOKEN,
+					user_id=None,
+					remote_addr=ip,
+					user_agent=user_agent,
+					details={"success": False, "error": "Missing refresh token"},
+				)
 				raise RefreshTokenMissingError("Missing refresh token")
 			token_hash = self._token_hasher.hash_token(token)
 
@@ -173,6 +190,14 @@ class AuthService:
 
 				user = await uow.users.get_by_id(rt.user_id)
 				if not user:
+					self._logsvc.register_log(
+						uow,
+						op_type=OpType.REFRESH_TOKEN,
+						user_id=rt.user_id,
+						remote_addr=ip,
+						user_agent=user_agent,
+						details={"success": False, "error": "User not found"},
+					)
 					raise UserNotFoundError("User not found")
 
 				# rotacja tokenów
@@ -181,7 +206,8 @@ class AuthService:
 
 				await self._refresh_token_svc.rotate(uow, old_rt=rt, new_hash=new_refresh_hash, ip=ip, user_agent=user_agent)
 				new_access = create_access_token(user_id=user.id)
-				uow.logbook.register_log(
+				await self._logsvc.register_log(
+					uow,
 					op_type=OpType.REFRESH_TOKEN,
 					user_id=user.id,
 					remote_addr=ip,
@@ -202,8 +228,23 @@ class AuthService:
 		user_id: str = payload.get("sub")
 		user = await uow.users.get_by_id(user_id)
 		if not user:
-			#@@TODO LOGGING
-			raise UserNotFoundError(f"User with id {user_id} not f ound")
+			await self._logsvc.register_log(
+				uow,
+				op_type=OpType.AUTO_AUTH,
+				user_id=None,
+				remote_addr="",
+				user_agent="",
+				details={"success": False, "error": "User not found"},
+			)
+			raise UserNotFoundError(f"User with id {user_id} not found")
+		await self._logsvc.register_log(
+			uow,
+			op_type=OpType.AUTO_AUTH,
+			user_id=user.id,
+			remote_addr="",
+			user_agent="",
+			details={"success": True},
+		)
 		return user
 
 	async def auto_authenticate(
@@ -218,15 +259,37 @@ class AuthService:
 		try:
 			async with uow:
 				user = await self.get_user_from_access_token(uow, access_token=access_token)
+				await self._logsvc.register_log(
+					uow,
+					op_type=OpType.AUTO_AUTH,
+					user_id=user.id,
+					remote_addr="",
+					user_agent="",
+					details={"success": True},
+				)
 				return user, access_token, None
 		except TokenExpiredError:
 			pass
 		except InvalidTokenError as e:
 			logger.warning("invalid access token: %s", e)
-			raise InvalidCredentialsError()
-			#@@TODO LOGGING
-   
+			await self._logsvc.register_log(
+				uow,
+				op_type=OpType.AUTO_AUTH,
+				user_id=None,
+				remote_addr="",
+				user_agent="",
+				details={"success": False, "error": "Invalid access token"},
+			)
+			raise InvalidCredentialsError()   
 		if not refresh_token:
+			await self._logsvc.register_log(
+				uow,
+				op_type=OpType.AUTO_AUTH,
+				user_id=None,
+				remote_addr="",
+				user_agent="",
+				details={"success": False, "error": "Missing refresh token"},
+			)
 			raise  InvalidCredentialsError()
 
 		async with uow:
@@ -235,6 +298,14 @@ class AuthService:
 				token_hash=await self._hasher.hash(refresh_token),
 				ip="",
 				user_agent="",
+			)
+			await self._logsvc.register_log(
+				uow,
+				op_type=OpType.AUTO_AUTH,
+				user_id=user.id,
+				remote_addr="",
+				user_agent="",
+				details={"success": True},
 			)
 			return user, new_access_token, new_refresh_token
 
