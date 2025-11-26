@@ -26,14 +26,12 @@ class FileService:
         user_agent: str, 
         uow: SqlAlchemyUoW
     ):
-        # 1. Przygotowanie danych pliku
         content = await file.read()
         size_bytes = len(content)
         sha256_hash = hashlib.sha256(content).hexdigest()
-        await file.seek(0)  # Reset wskaźnika, aby storage mógł zapisać plik
+        await file.seek(0) 
 
         async with uow:
-            # 2. Logowanie próby (przed logiką biznesową)
             await self.logbook.register_log(
                 uow=uow,
                 op_type=OpType.FILE_UPLOAD_ATTEMPT,
@@ -47,13 +45,11 @@ class FileService:
                 }
             )
 
-            # 3. Obsługa Bloba (Deduplikacja)
             blob = await uow.blobs.get_by_hash(sha256_hash)
             is_new_blob = False
 
             if not blob:
                 is_new_blob = True
-                # Fizyczny zapis na dysk tylko jeśli blob nie istnieje
                 storage_path = await self.storage.save(file, sha256_hash)
                 
                 blob = Blob(
@@ -62,49 +58,62 @@ class FileService:
                     storage_path=storage_path,
                 )
                 await uow.blobs.add(blob)
-                # Flush jest ważny! Nadaje ID nowemu obiektowi (jeśli baza generuje ID)
                 await uow.session.flush()
 
-            # 4. Walidacja Parent Folder (jeśli podano)
             if parent_folder_id:
                 parent_folder: File = await uow.files.get(parent_folder_id)
                 if not parent_folder:
                      raise InvalidParentFolder(f"Folder {parent_folder_id} not found")
                 
-                # Walidacja uprawnień i typu
                 if parent_folder.owner_id != user_id:
                     raise InvalidParentFolder("Access denied to this folder")
                 if not parent_folder.is_folder:
                     raise InvalidParentFolder("Target is not a folder")
 
-            # 5. Tworzenie Pliku (To musi być POZA if parent_folder_id)
-            new_file = File(
-                owner_id=user_id,
-                name=file.filename,
-                mime_type=file.content_type,
-                is_folder=False,
-                parent_folder_id=parent_folder_id, # Może być UUID lub None
+            existing_file = await uow.files.get_by_owner_and_name(
+                owner_id=user_id, 
+                name=file.filename, 
+                parent_id=parent_folder_id
             )
-            await uow.files.add(new_file)
-            await uow.session.flush()  # Musimy mieć ID pliku dla FileVersion
 
-            # 6. Tworzenie Wersji
-            # Uwaga: Łączymy wersję z Blobem. Zalecam użycie blob_id (FK), 
-            # ale zostawiłem Twoje pola, jeśli tak masz w modelu.
+            target_file_id = None
+            new_version_no = 1
+
+            if existing_file:
+                target_file_id = existing_file.id
+                if existing_file.current_version:
+                    new_version_no = existing_file.current_version.version_no + 1
+                else:
+                    new_version_no = 1 
+                
+                existing_file.mime_type = file.content_type
+                
+            else:
+                new_file = File(
+                    owner_id=user_id,
+                    name=file.filename,
+                    mime_type=file.content_type,
+                    is_folder=False,
+                    parent_folder_id=parent_folder_id,
+                )
+                await uow.files.add(new_file)
+                await uow.session.flush() 
+                target_file_id = new_file.id
+                new_version_no = 1
+                existing_file = new_file 
+
             new_version = FileVersion(
-                file_id=new_file.id,
-                version_no=1,         # Zakładamy wersję 1 dla nowego pliku
+                file_id=target_file_id,
+                version_no=new_version_no,
                 uploaded_by=user_id,
-                # Opcjonalnie, jeśli trzymasz te dane też w wersji (denormalizacja):
-                # size_bytes=blob.size_bytes, 
+                blob_id=blob.id, 
+                created_at=utcnow()
             )
             await uow.file_versions.add(new_version)
             await uow.session.flush()
 
-            # 7. Aktualizacja wskaźnika na aktualną wersję
-            new_file.current_version_id = new_version.id
+            existing_file.current_version_id = new_version.id
 
-            # 8. Logowanie sukcesu
             await self.logbook.register_log(
                 uow=uow,
                 op_type=OpType.UPLOAD,
@@ -112,22 +121,18 @@ class FileService:
                 remote_addr=ip,
                 user_agent=user_agent,
                 details={
-                    "filename": new_file.name,
-                    "file_id" : str(new_file.id),
-                    "file_version_id": str(new_version.id),
-                    "blob_id": str(blob.id),
-                    "size": size_bytes,
-                    "deduplicated": not is_new_blob,
-                    "parent_folder": str(parent_folder_id) if parent_folder_id else "root"
+                    "filename": file.filename,
+                    "file_id": str(target_file_id),
+                    "version_no": new_version_no,
+                    "deduplicated": not is_new_blob
                 }
             )
-
             await uow.commit()
-            
+
             return {
-                "id": new_file.id,
-                "name": new_file.name,
-                "size": size_bytes,
+                "id": target_file_id,
+                "name": file.filename,
+                "version": new_version_no, # Zwracamy numer wersji
                 "deduplicated": not is_new_blob
             }
 

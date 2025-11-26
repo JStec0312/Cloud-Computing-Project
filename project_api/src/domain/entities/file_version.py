@@ -20,6 +20,7 @@ class FileVersion(Base):
     version_no: Mapped[int] = mapped_column(Integer, nullable=False)
     uploaded_by: Mapped[Optional[uuid.UUID]] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     uploaded_at: Mapped[str] = mapped_column(TIMESTAMP(timezone=True), nullable=False, server_default=text("now()"))
+    blob_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("blobs.id", ondelete="CASCADE"), nullable=False)
 
     file: Mapped["File"] = relationship(back_populates="versions", uselist=False, viewonly=True, primaryjoin="File.id==FileVersion.file_id")
     current_of: Mapped[List["File"]] = relationship(back_populates="current_version", uselist=True, viewonly=True, primaryjoin="File.current_version_id==FileVersion.id")

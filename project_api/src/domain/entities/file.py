@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 class File(Base):
     __tablename__ = "files"
-
+    
     id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     owner_id: Mapped[Optional[uuid.UUID]] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     name: Mapped[str] = mapped_column(String(512), nullable=False)

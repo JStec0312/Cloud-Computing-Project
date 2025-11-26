@@ -15,3 +15,8 @@ class FileRepo:
     async def add(self, file: File) -> None:
         self.session.add(file)
         return None
+
+    async def get_by_owner_and_name(self, owner_id: str, name: str, parent_id: str | None) -> File | None:
+        stmnt = select(File).where(File.owner_id == owner_id, File.name == name, File.parent_folder_id == parent_id)
+        result = await self.session.execute(stmnt)
+        return result.scalar_one_or_none()
