@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Header, Request, File, UploadFile, Form, Query, Cookie
+from fastapi import APIRouter, Depends, Header, Request, File, UploadFile, Form, Query, Cookie, HTTPException
 from src.deps import get_uow
 from src.api.schemas.files import  RenameFileRequest, FileResponse
 from src.infrastructure.uow import SqlAlchemyUoW
@@ -9,7 +9,7 @@ from typing import Annotated, Optional
 from src.rate_limiting import limiter
 import uuid
 from src.api.schemas.users import UserFromToken
-from src.application.errors import FileTooLargeError, FolderNotFoundError, InvalidParentFolder, FileNameExistsError
+from src.application.errors import FileTooLargeError, FolderNotFoundError, InvalidParentFolder, FileNameExistsError, FileNotFoundError
 from src.api.schemas.files import DirectoryListingResponse
 from uuid import UUID
 from src.config.app_config import settings
@@ -21,10 +21,12 @@ router = APIRouter(
 RATE_LIMIT = settings.STANDARD_RATE_LIMIT
 @router.post("/", status_code=201)
 @limiter.limit(RATE_LIMIT)
+#/api/v1/files/?parent_id=uuid-here
 async def upload_file(
     request: Request,
+    parent_id: Optional[UUID] = Form(None, description="ID folderu nadrzędnego. Jeśli brak - plik zostanie przesłany do Root."),
+
     file: UploadFile = File(...), 
-    parent_id: Optional[uuid.UUID] = Form(None), 
     current_user: UserFromToken = Depends(current_user),
     filesvc: FileService = Depends(get_file_service),
     uow: SqlAlchemyUoW = Depends(get_uow) 
@@ -42,9 +44,9 @@ async def upload_file(
         user_agent = user_agent,
         )
     except FileTooLargeError as e:
-        return {"error": str(e)}
+        raise HTTPException(status_code=e.status_code, detail=str(e))
     except InvalidParentFolder as e:
-        return {"error": str(e)}
+        raise HTTPException(status_code=e.status_code, detail=str(e))
     
     
 
@@ -77,7 +79,7 @@ async def get_user_files(
 
         return result
     except FolderNotFoundError as e:
-        return {"error": str(e)}
+        raise HTTPException(status_code=e.status_code, detail=str(e))
     
 
 
@@ -103,9 +105,9 @@ async def rename_file(
     )
         return res
     except FileNameExistsError as e:
-        return {"error": str(e)}
+        raise HTTPException(status_code=e.status_code, detail=str(e))
     except FileNotFoundError as e:
-        return {"error": str(e)}
+        raise HTTPException(status_code=e.status_code, detail=str(e))
 
 
 @router.get("/{file_id}/download")

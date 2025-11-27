@@ -1,4 +1,5 @@
 
+from src.config.app_config import settings
 class UserError(Exception):
     def __init__(self, status_code: int, detail: str):
         self.status_code = status_code
@@ -41,12 +42,12 @@ class InvalidTokenError(Exception):
         self.detail = detail
 
 class InvalidParentFolder(Exception):
-    def __init__(self, folder_id: str):
+    def __init__(self, folder_id: str, detail: str = "Invalid parent folder"):
         self.status_code = 404
         self.detail = f"Parent folder with id {folder_id} not found."
 
 class FileTooLargeError(Exception):
-    def __init__(self, max_size_mb: int):
+    def __init__(self, max_size_mb: int = settings.max_file_upload_size_mb):
         self.status_code = 413
         self.detail = f"File size exceeds the maximum allowed size of {max_size_mb} MB."
 
@@ -56,8 +57,11 @@ class FolderNotFoundError(Exception):
         self.detail = f"Folder with id {folder_id} not found."
 
 class FileNameExistsError(Exception):
-    def __init__(self, file_name: str):
+    def __init__(self,  detail: str = "File name already exists in the target folder"):
         self.status_code = 409
-        self.detail = f"File with name '{file_name}' already exists in the target folder."
+        self.detail = detail 
         
-        
+class FileNotFoundError(Exception):
+    def __init__(self, detail: str = "File not found"):
+        self.status_code = 404
+        self.detail = detail

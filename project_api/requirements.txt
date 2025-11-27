@@ -11,3 +11,10 @@ asyncio
 argon2-cffi
 jwt
 python-jose[cryptography]
+
+# Testing
+pytest
+pytest-asyncio
+pytest-cov
+httpx
+aiosqlite

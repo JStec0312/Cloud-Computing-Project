@@ -1,10 +1,11 @@
 from src.application.abstraction.IFileStorage import IBlobStorage
+from src.domain.entities import file
 from src.infrastructure.uow import SqlAlchemyUoW
 from src.application.logbook_service import LogbookService
 from src.domain.entities.blob import Blob
 import hashlib
 from fastapi import UploadFile
-from src.application.errors import FileTooLargeError, FolderNotFoundError, InvalidParentFolder
+from src.application.errors import FileTooLargeError, FolderNotFoundError, InvalidParentFolder, FileNotFoundError
 from src.domain.enums.op_type import OpType
 from src.domain.entities.file import File
 from src.domain.entities.file_version import FileVersion
@@ -35,7 +36,7 @@ class FileService:
         size_bytes = len(content)
         max_size_bytes = settings.max_file_upload_size_mb * 1024 * 1024
         if size_bytes > max_size_bytes:
-            raise FileTooLargeError(settings.max_file_upload_size_mb)
+            raise FileTooLargeError()
         sha256_hash = hashlib.sha256(content).hexdigest()
         await file.seek(0) 
 
@@ -69,14 +70,14 @@ class FileService:
                 await uow.session.flush()
 
             if parent_folder_id:
-                parent_folder: File = await uow.files.get(parent_folder_id)
+                parent_folder: File = await uow.files.get_by_id(parent_folder_id)
                 if not parent_folder:
-                     raise InvalidParentFolder(f"Folder {parent_folder_id} not found")
+                     raise InvalidParentFolder(parent_folder_id, "Parent folder does not exist.")
                 
                 if parent_folder.owner_id != user_id:
-                    raise InvalidParentFolder("Access denied to this folder")
+                    raise InvalidParentFolder(parent_folder_id, "Access denied to this folder.")
                 if not parent_folder.is_folder:
-                    raise InvalidParentFolder("Target is not a folder")
+                    raise InvalidParentFolder(parent_folder_id, "Target is not a folder.")
 
             existing_file = await uow.files.get_by_owner_and_name(
                 owner_id=user_id, 
@@ -228,9 +229,26 @@ class FileService:
 
     async def rename_file(self, uow: SqlAlchemyUoW,  user_id: UUID,  file_id: UUID,  new_name: str, ip: str, user_agent: str, session_id: Optional[UUID] = None) -> FileResponse:
         async with uow:
-            file = await uow.files.get_by_id(file_id)
+            file : File = await uow.files.get_by_id(file_id)
+            
             if not file or file.owner_id != user_id:
-                raise FileNotFoundError()
+                self.logbook.register_log(
+                    uow=uow,
+                    op_type=OpType.RENAME,
+                    user_id=user_id,
+                    remote_addr=ip,
+                    session_id=session_id,
+                    user_agent=user_agent,
+                    details={
+                        "file_id": str(file_id),
+                        "status": "failed",
+                        "attempted_name": new_name,
+                        "reason": "not_found"
+                    }
+                )
+                raise FileNotFoundError(detail=f"File with id {file_id} not found.")
+
+            current_size = file.current_version.blob.size_bytes if file.current_version and file.current_version.blob else 0
             if file.name == new_name:
                 await self.logbook.register_log(
                     uow=uow,
@@ -245,14 +263,12 @@ class FileService:
                         "attempted_name": new_name
                     }
                 )
-                current_size = 0
-                current_updated_at = file.created_at
                 return FileResponse(
                     id=file.id,
                     name=file.name,
                     is_folder=file.is_folder,
                     mime_type=file.mime_type,
-                    size_bytes=file.current_version.blob.size_bytes if file.current_version and file.current_version.blob else 0,
+                    size_bytes=current_size, 
                 ) 
 
             sibling = await uow.files.get_by_name_in_folder(
@@ -276,13 +292,13 @@ class FileService:
                         "reason": "name_exists"
                     }
                 )
-                raise FileNameExistsError(f"File with name '{new_name}' already exists in this folder.")
+                raise FileNameExistsError(detail=f"File name '{new_name}' already exists in the target folder.")
+
             old_name = file.name
             file.name = new_name
-
             await self.logbook.register_log(
                 uow=uow,
-                op_type=OpType.RENAME, # Dodaj taki typ do Enuma
+                op_type=OpType.RENAME,
                 user_id=user_id,
                 file_id=file.id,
                 remote_addr=ip,
@@ -294,13 +310,12 @@ class FileService:
                     "is_folder": file.is_folder
                 }
             )
-
+            await uow.commit() 
             
             return FileResponse(
                 id=file.id,
-                name=new_name, # Używamy nowej nazwy z argumentu (bo file.name może być wygaszone)
-                is_folder=file.is_folder, # Typ prosty (bool), zazwyczaj bezpieczny, ale można też zapisać do zmiennej
+                name=new_name, 
+                is_folder=file.is_folder,
                 mime_type=file.mime_type,
-                size_bytes=current_size,      # Zmienna lokalna
-                updated_at=current_updated_at # Zmienna lokalna
+                size_bytes=current_size,      
             )

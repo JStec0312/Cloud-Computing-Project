@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     max_file_upload_size_mb: int = 500  # 500 MB
 
     # Rate limiting
-    STANDARD_RATE_LIMIT: str = "5/minute"
+    STANDARD_RATE_LIMIT: str = "2000/minute" # Adjusted for local testing change in dev
 
     def dsn_async(self) -> str:
         return f"postgresql+asyncpg://{self.db_user}:{self.db_pass}@{self.db_host}:{self.db_port}/{self.db_name}"
