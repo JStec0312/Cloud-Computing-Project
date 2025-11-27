@@ -44,5 +44,20 @@ class InvalidParentFolder(Exception):
     def __init__(self, folder_id: str):
         self.status_code = 404
         self.detail = f"Parent folder with id {folder_id} not found."
+
+class FileTooLargeError(Exception):
+    def __init__(self, max_size_mb: int):
+        self.status_code = 413
+        self.detail = f"File size exceeds the maximum allowed size of {max_size_mb} MB."
+
+class FolderNotFoundError(Exception):
+    def __init__(self, folder_id: str):
+        self.status_code = 404
+        self.detail = f"Folder with id {folder_id} not found."
+
+class FileNameExistsError(Exception):
+    def __init__(self, file_name: str):
+        self.status_code = 409
+        self.detail = f"File with name '{file_name}' already exists in the target folder."
         
         

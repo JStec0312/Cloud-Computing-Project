@@ -2,15 +2,18 @@ from src.application.abstraction.IFileStorage import IBlobStorage
 from src.infrastructure.uow import SqlAlchemyUoW
 from src.application.logbook_service import LogbookService
 from src.domain.entities.blob import Blob
-from src.common.utils.time_utils import utcnow
 import hashlib
-from src.application.errors import InvalidParentFolder
+from fastapi import UploadFile
+from src.application.errors import FileTooLargeError, FolderNotFoundError, InvalidParentFolder
 from src.domain.enums.op_type import OpType
 from src.domain.entities.file import File
 from src.domain.entities.file_version import FileVersion
 from uuid import UUID
 from typing import Optional
-from fastapi import UploadFile
+from src.api.schemas.files import FileResponse
+import fastapi
+from src.config.app_config import settings
+from src.application.errors import FileNameExistsError
 
 class FileService:
     def __init__(self, logbook: LogbookService, storage: IBlobStorage):
@@ -24,10 +27,15 @@ class FileService:
         parent_folder_id: Optional[UUID], 
         ip: str, 
         user_agent: str, 
-        uow: SqlAlchemyUoW
+        uow: SqlAlchemyUoW,
+        session_id: Optional[UUID] = None
     ):
+        
         content = await file.read()
         size_bytes = len(content)
+        max_size_bytes = settings.max_file_upload_size_mb * 1024 * 1024
+        if size_bytes > max_size_bytes:
+            raise FileTooLargeError(settings.max_file_upload_size_mb)
         sha256_hash = hashlib.sha256(content).hexdigest()
         await file.seek(0) 
 
@@ -107,7 +115,6 @@ class FileService:
                 version_no=new_version_no,
                 uploaded_by=user_id,
                 blob_id=blob.id, 
-                created_at=utcnow()
             )
             await uow.file_versions.add(new_version)
             await uow.session.flush()
@@ -120,6 +127,7 @@ class FileService:
                 user_id=user_id,
                 remote_addr=ip,
                 user_agent=user_agent,
+                session_id=session_id,
                 details={
                     "filename": file.filename,
                     "file_id": str(target_file_id),
@@ -136,4 +144,163 @@ class FileService:
                 "deduplicated": not is_new_blob
             }
 
-                                
+
+    async def list_files(
+        self, 
+        uow: SqlAlchemyUoW,
+        ip: str,
+        user_agent: str,
+        user_id: UUID, 
+        folder_id: Optional[UUID] = None,
+        session_id: Optional[UUID] = None
+    ) -> dict:
+        async with uow:
+            await self.logbook.register_log(
+                uow=uow,
+                op_type=OpType.LIST_FILES,
+                user_id=user_id,
+                remote_addr=ip,
+                session_id=session_id,
+                user_agent=user_agent,
+                details={"folder_id": str(folder_id) if folder_id else "root", "status": "initiated"}
+            )
+            breadcrumbs = []
+            
+            if folder_id:
+                folder = await uow.files.get_by_id(folder_id)
+                if not folder or folder.owner_id != user_id or not folder.is_folder:
+                    self.logbook.register_log(
+                        uow=uow,
+                        op_type=OpType.LIST_FILES,
+                        user_id=user_id,
+                        remote_addr=ip,
+                        session_id=session_id,
+                        user_agent=user_agent,
+                        details={"folder_id": str(folder_id), "status": "failed"}
+                    )
+                    raise FolderNotFoundError(f"Folder {folder_id} not found or access denied")
+                
+                
+                curr = folder
+                while curr:
+                    breadcrumbs.insert(0, {"id": str(curr.id), "name": curr.name})
+                    if curr.parent_folder_id:
+                         
+                         curr = await uow.files.get_by_id(curr.parent_folder_id)
+                    else:
+                        curr = None
+            
+            
+            files_db = await uow.files.list_in_folder(user_id, folder_id)
+
+            items = []
+            for f in files_db:
+                size = 0
+                if not f.is_folder and f.current_version and f.current_version.blob:
+                    size = f.current_version.blob.size_bytes
+                
+
+
+                items.append({
+                    "id": f.id,
+                    "name": f.name,
+                    "is_folder": f.is_folder,
+                    "mime_type": f.mime_type,
+                    "size_bytes": size,
+                })
+
+            self.logbook.register_log(
+                uow=uow,
+                op_type=OpType.LIST_FILES,
+                session_id=session_id,
+                user_id=user_id,
+                remote_addr=ip,
+                user_agent=user_agent,
+                details={"folder_id": str(folder_id) if folder_id else "root", "status": "completed"}
+            )
+
+            return {
+                "current_folder_id": folder_id,
+                "items": items,
+                "breadcrumbs": breadcrumbs
+            }
+        
+
+    async def rename_file(self, uow: SqlAlchemyUoW,  user_id: UUID,  file_id: UUID,  new_name: str, ip: str, user_agent: str, session_id: Optional[UUID] = None) -> FileResponse:
+        async with uow:
+            file = await uow.files.get_by_id(file_id)
+            if not file or file.owner_id != user_id:
+                raise FileNotFoundError()
+            if file.name == new_name:
+                await self.logbook.register_log(
+                    uow=uow,
+                    op_type=OpType.RENAME,
+                    user_id=user_id,
+                    remote_addr=ip,
+                    user_agent=user_agent,
+                    session_id=session_id,
+                    details={
+                        "file_id": str(file.id),
+                        "status": "no_change",
+                        "attempted_name": new_name
+                    }
+                )
+                current_size = 0
+                current_updated_at = file.created_at
+                return FileResponse(
+                    id=file.id,
+                    name=file.name,
+                    is_folder=file.is_folder,
+                    mime_type=file.mime_type,
+                    size_bytes=file.current_version.blob.size_bytes if file.current_version and file.current_version.blob else 0,
+                ) 
+
+            sibling = await uow.files.get_by_name_in_folder(
+                user_id=user_id,
+                name=new_name,
+                parent_id=file.parent_folder_id
+            )
+            
+            if sibling:
+                await self.logbook.register_log(
+                    uow=uow,
+                    op_type=OpType.RENAME,
+                    user_id=user_id,
+                    remote_addr=ip,
+                    user_agent=user_agent,
+                    session_id=session_id,
+                    details={
+                        "file_id": str(file.id),
+                        "status": "failed",
+                        "attempted_name": new_name,
+                        "reason": "name_exists"
+                    }
+                )
+                raise FileNameExistsError(f"File with name '{new_name}' already exists in this folder.")
+            old_name = file.name
+            file.name = new_name
+
+            await self.logbook.register_log(
+                uow=uow,
+                op_type=OpType.RENAME, # Dodaj taki typ do Enuma
+                user_id=user_id,
+                file_id=file.id,
+                remote_addr=ip,
+                session_id=session_id,
+                user_agent=user_agent,
+                details={
+                    "old_name": old_name,
+                    "new_name": new_name,
+                    "is_folder": file.is_folder
+                }
+            )
+
+            
+            return FileResponse(
+                id=file.id,
+                name=new_name, # Używamy nowej nazwy z argumentu (bo file.name może być wygaszone)
+                is_folder=file.is_folder, # Typ prosty (bool), zazwyczaj bezpieczny, ale można też zapisać do zmiennej
+                mime_type=file.mime_type,
+                size_bytes=current_size,      # Zmienna lokalna
+                updated_at=current_updated_at # Zmienna lokalna
+            )

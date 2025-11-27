@@ -11,3 +11,4 @@ class OpType(enum.Enum):
     USER_REGISTER = "user_register"
     REFRESH_TOKEN="refresh_token"
     FILE_UPLOAD_ATTEMPT="file_upload_attempt"
+    RENAME="rename"

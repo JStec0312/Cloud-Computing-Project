@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from src.domain.entities.file import File
     from src.domain.entities.user import User
     from src.domain.entities.package_item import PackageItem
+    from src.domain.entities.blob import Blob
 
 class FileVersion(Base):
     __tablename__ = "file_versions"
@@ -26,5 +27,6 @@ class FileVersion(Base):
     current_of: Mapped[List["File"]] = relationship(back_populates="current_version", uselist=True, viewonly=True, primaryjoin="File.current_version_id==FileVersion.id")
     uploader: Mapped[Optional["User"]] = relationship(back_populates="uploaded_versions")
     package_items: Mapped[List["PackageItem"]] = relationship(back_populates="version")
+    blob : Mapped["Blob"] = relationship(back_populates="file_versions", uselist=False, viewonly=True, primaryjoin="Blob.id==FileVersion.blob_id")
     def __repr__(self) -> str:
         return f"FileVersion(id={self.id}, file_id={self.file_id}, version_no={self.version_no}, uploaded_by={self.uploaded_by})"

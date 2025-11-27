@@ -8,12 +8,13 @@ from src.infrastructure.uow import SqlAlchemyUoW
 from src.api.schemas.auth import LoginUserRequest, RefreshTokenResponse
 from src.config.app_config import settings
 from ..schemas.auth import LoginUserResponse, RegisterUserRequest, RegisterUserResponse
+from src.rate_limiting import limiter
 
 logger = logging.getLogger(__name__)
-
 router = APIRouter(prefix="/auth", tags=["auth"])
-
+RATE_LIMIT = settings.STANDARD_RATE_LIMIT
 @router.post("/register", response_model=RegisterUserResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit(RATE_LIMIT)
 async def register_user_ep(
     body: RegisterUserRequest,
     request: Request,
@@ -39,6 +40,7 @@ async def register_user_ep(
         raise HTTPException(status_code=409, detail=str(e))
     
 @router.post("/login", response_model=LoginUserResponse, status_code=status.HTTP_200_OK)
+@limiter.limit(RATE_LIMIT)
 async def login_user_ep(
     body: LoginUserRequest,
     request: Request,
@@ -71,6 +73,7 @@ async def login_user_ep(
     
 
 @router.post("/refresh", response_model=RefreshTokenResponse, status_code=status.HTTP_200_OK)
+@limiter.limit(RATE_LIMIT)
 async def refresh_token_ep(
     request: Request,
     response: Response,
@@ -81,7 +84,7 @@ async def refresh_token_ep(
         refresh_token_cookie = request.cookies.get(settings.refresh_cookie_name)
         if not refresh_token_cookie:
             raise RefreshTokenMissingError(detail="Refresh token cookie is missing")
-        user, access_token, new_refresh_token = await auth.refresh_tokens(
+        user, access_token, new_refresh_token, session_id = await auth.refresh_tokens(
             uow,
             token=refresh_token_cookie,
             ip=request.client.host,

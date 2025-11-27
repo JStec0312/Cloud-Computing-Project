@@ -3,12 +3,14 @@ import logging
 from fastapi import Depends, Request, Response, HTTPException, status
 from src.application.errors import (InvalidCredentialsError, MissingAccessTokenError,
     RefreshTokenError)
+    
 from src.infrastructure.uow import SqlAlchemyUoW
 from src.deps import get_auth_service, get_uow
 from src.application.auth_service import AuthService
 from src.config.app_config import settings
 from src.domain.entities.user import User
 import re
+from src.api.schemas.users import UserFromToken
 logger = logging.getLogger(__name__)
 
 _BEARER_RE = re.compile(r"^\s*Bearer\s+(.+)$", re.IGNORECASE)
@@ -23,7 +25,7 @@ async def current_user(
     response: Response,
     uow: SqlAlchemyUoW = Depends(get_uow),
     auth: AuthService = Depends(get_auth_service),
-) -> User:
+) -> UserFromToken:
     access = get_bearer_token(request)
     refresh = (request.cookies.get(settings.refresh_cookie_name) or "").strip('"').strip()
 
@@ -45,6 +47,7 @@ async def current_user(
                 user_agent=request.headers.get("User-Agent", ""),
             )
 
+
         if maybe_new_refresh:
             response.set_cookie(
                 key=settings.refresh_cookie_name,
@@ -58,7 +61,12 @@ async def current_user(
             )
 
         request.state.user = user
-        return user
+        return UserFromToken(
+            id=user.id,
+            email=user.email,
+            display_name=user.display_name,
+            created_at=user.created_at,
+        )
 
     except MissingAccessTokenError as e:
         logger.warning("missing access token: %s ip=%s", e, request.client.host if request.client else "-")

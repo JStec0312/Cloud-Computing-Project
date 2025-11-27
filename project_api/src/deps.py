@@ -12,7 +12,6 @@ from src.application.file_service import FileService
 from src.config.app_config import settings
 
 
-
 async def get_uow():
     return SqlAlchemyUoW(async_session_maker)
 

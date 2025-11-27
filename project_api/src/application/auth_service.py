@@ -1,5 +1,6 @@
 # src/application/auth_service.py
 import logging
+import re
 from uuid import uuid4
 from typing import Optional, Tuple
 from sqlalchemy.exc import IntegrityError
