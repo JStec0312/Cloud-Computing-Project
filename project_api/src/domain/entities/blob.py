@@ -15,12 +15,12 @@ class Blob(Base):
     __tablename__ = "blobs"
 
     id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    sha256: Mapped[str] = mapped_column(CHAR(64), nullable=False, unique=True)
+    sha256: Mapped[str] = mapped_column(CHAR(64), nullable=False, unique=False)
     size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
     storage_path: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[str] = mapped_column(TIMESTAMP(timezone=True), nullable=False, server_default=text("now()"))
 
-    file_versions: Mapped[List["FileVersion"]] = relationship(back_populates="blob")
+    file_versions: Mapped[List["FileVersion"]] = relationship(back_populates="blob", cascade="all, delete-orphan")
 
     packages: Mapped[List["Package"]] = relationship(back_populates="archive_blob")
     def __repr__(self) -> str:

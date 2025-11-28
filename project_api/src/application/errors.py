@@ -65,3 +65,8 @@ class FileNotFoundError(Exception):
     def __init__(self, detail: str = "File not found"):
         self.status_code = 404
         self.detail = detail
+
+class AccessDeniedError(Exception):
+    def __init__(self, detail: str = "Access denied"):
+        self.status_code = 403
+        self.detail = detail

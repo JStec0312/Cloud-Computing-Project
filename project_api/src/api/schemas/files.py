@@ -28,6 +28,13 @@ class DirectoryListingResponse(BaseModel):
     items: List[FileResponse]
     breadcrumbs: List[dict] # np. [{"i
 
+class VersionResponse(BaseModel):
+    id: UUID
+    version_no: int
+    uploaded_at: datetime
+    uploaded_by: UUID
+    size_bytes: int
+    model_config = ConfigDict(from_attributes=True) 
 
 
 class RenameFileRequest(BaseModel):

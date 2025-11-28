@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Header, Request, File, UploadFile, Form, Query, Cookie, HTTPException
 from src.deps import get_uow
-from src.api.schemas.files import  RenameFileRequest, FileResponse
+from src.api.schemas.files import  RenameFileRequest, FileResponse, VersionResponse
 from src.infrastructure.uow import SqlAlchemyUoW
 from src.application.file_service import FileService
 from src.deps import get_filesvc as get_file_service
@@ -9,7 +9,7 @@ from typing import Annotated, Optional
 from src.rate_limiting import limiter
 import uuid
 from src.api.schemas.users import UserFromToken
-from src.application.errors import FileTooLargeError, FolderNotFoundError, InvalidParentFolder, FileNameExistsError, FileNotFoundError
+from src.application.errors import FileTooLargeError, FolderNotFoundError, InvalidParentFolder, FileNameExistsError, FileNotFoundError, AccessDeniedError
 from src.api.schemas.files import DirectoryListingResponse
 from uuid import UUID
 from src.config.app_config import settings
@@ -110,12 +110,87 @@ async def rename_file(
         raise HTTPException(status_code=e.status_code, detail=str(e))
 
 
+
 @router.get("/{file_id}/download")
 async def download_file():
     pass
 
 
-@router.delete("/{file_id}")
-async def delete_file():
+@router.delete("/{file_id}", status_code=204)
+async def delete_file(
+    request: Request,
+    file_id: UUID,
+    current_user: UserFromToken = Depends(current_user),
+    filesvc: FileService = Depends(get_file_service),
+    uow: SqlAlchemyUoW = Depends(get_uow)
+):
+    """
+    Usuwa plik.
+    """
+    try:
+        await filesvc.delete_file(
+            uow=uow,
+            user_id=current_user.id,
+            file_id=file_id,
+            ip=request.client.host,
+            user_agent=request.headers.get("user-agent"),
+        )
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+    except AccessDeniedError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+
+
+@router.post("/folders", status_code=201)
+async def create_folder(
+    #body: CreateFolderRequest, 
+    request: Request,
+    current_user: UserFromToken = Depends(current_user),
+    filesvc: FileService = Depends(get_file_service),
+    uow: SqlAlchemyUoW = Depends(get_uow)
+):
+    """
+    Tworzy nowy folder.
+    """
     pass
+
+
+@router.get("/{file_id}/versions", response_model=list[VersionResponse])
+async def get_file_versions(
+    file_id: UUID,
+    request: Request,
+    current_user: UserFromToken = Depends(current_user),
+    filesvc: FileService = Depends(get_file_service),
+    uow: SqlAlchemyUoW = Depends(get_uow)
+):
+    try:
+        versions = await filesvc.get_file_versions(
+            uow=uow,
+            user_id=current_user.id,
+            file_id=file_id,
+            ip=request.client.host,
+            user_agent=request.headers.get("user-agent"),
+        )
+        return versions
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+    except AccessDeniedError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+    
+
+
+@router.get("/{file_id}/versions/{version_id}/download")
+async def download_file_version(
+    file_id: UUID,
+    version_id: UUID,
+    request: Request,
+    current_user: UserFromToken = Depends(current_user),
+    filesvc: FileService = Depends(get_file_service),
+    uow: SqlAlchemyUoW = Depends(get_uow)
+):
+    """
+    Pobiera (ściąga) konkretną wersję pliku.
+    """
+    pass
+
 

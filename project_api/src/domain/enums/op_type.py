@@ -12,3 +12,4 @@ class OpType(enum.Enum):
     REFRESH_TOKEN="refresh_token"
     FILE_UPLOAD_ATTEMPT="file_upload_attempt"
     RENAME="rename"
+    FILE_DELETE="file_delete"

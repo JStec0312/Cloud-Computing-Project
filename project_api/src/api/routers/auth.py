@@ -109,3 +109,10 @@ async def refresh_token_ep(
         logger.error(f"Unexpected error occurred: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout_user_ep(
+    response: Response,
+):
+    response.delete_cookie(settings.refresh_cookie_name)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

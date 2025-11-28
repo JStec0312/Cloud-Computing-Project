@@ -76,3 +76,10 @@ class FileRepo:
         )
         result = await self.session.execute(query)
         return result.scalars().first()
+
+
+    async def delete(self, file) -> None:
+        await self.session.delete(file)
+        return None
+    
+    

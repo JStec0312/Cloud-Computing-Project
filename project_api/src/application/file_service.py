@@ -1,15 +1,16 @@
 from src.application.abstraction.IFileStorage import IBlobStorage
-from src.domain.entities import file
+from src.common.utils.time_utils import utcnow
 from src.infrastructure.uow import SqlAlchemyUoW
 from src.application.logbook_service import LogbookService
 from src.domain.entities.blob import Blob
 import hashlib
 from fastapi import UploadFile
-from src.application.errors import FileTooLargeError, FolderNotFoundError, InvalidParentFolder, FileNotFoundError
+from src.application.errors import FileTooLargeError, FolderNotFoundError, InvalidParentFolder, FileNotFoundError, AccessDeniedError
 from src.domain.enums.op_type import OpType
 from src.domain.entities.file import File
 from src.domain.entities.file_version import FileVersion
 from uuid import UUID
+from src.api.schemas.files import VersionResponse
 from typing import Optional
 from src.api.schemas.files import FileResponse
 import fastapi
@@ -110,11 +111,12 @@ class FileService:
                 target_file_id = new_file.id
                 new_version_no = 1
                 existing_file = new_file 
-
+            from src.common.utils.time_utils import utcnow
             new_version = FileVersion(
                 file_id=target_file_id,
                 version_no=new_version_no,
                 uploaded_by=user_id,
+                uploaded_at=utcnow(),
                 blob_id=blob.id, 
             )
             await uow.file_versions.add(new_version)
@@ -136,7 +138,6 @@ class FileService:
                     "deduplicated": not is_new_blob
                 }
             )
-            await uow.commit()
 
             return {
                 "id": target_file_id,
@@ -310,7 +311,6 @@ class FileService:
                     "is_folder": file.is_folder
                 }
             )
-            await uow.commit() 
             
             return FileResponse(
                 id=file.id,
@@ -319,3 +319,89 @@ class FileService:
                 mime_type=file.mime_type,
                 size_bytes=current_size,      
             )
+        
+    async def delete_file(self, uow: SqlAlchemyUoW, user_id: UUID, file_id: UUID, ip: str, user_agent: str, session_id: Optional[UUID] = None):
+        async with uow:
+            self.logbook.register_log(
+                uow=uow,
+                op_type=OpType.FILE_DELETE,
+                user_id=user_id,
+                remote_addr=ip,
+                user_agent=user_agent,
+                session_id=session_id,
+                details={
+                    "file_id": str(file_id),
+                    "status": "initiated"
+                }
+            )
+            file: File = await uow.files.get_by_id(file_id)
+            if not file:
+                raise FileNotFoundError(detail=f"File with id {file_id} not found.")
+            if file.owner_id != user_id:
+                raise AccessDeniedError(detail="Access denied to delete this file.")
+            
+            await uow.files.delete(file)
+            self.logbook.register_log(
+                uow=uow,
+                op_type=OpType.FILE_DELETE,
+                user_id=user_id,
+                remote_addr=ip,
+                user_agent=user_agent,
+                session_id=session_id,
+                details={
+                    "file_id": str(file_id),
+                    "status": "completed"
+                }
+            )
+            return
+        
+    async def get_file_versions(self, uow: SqlAlchemyUoW, file_id: UUID, user_id: UUID, ip: str, user_agent: str, session_id: Optional[UUID] = None) -> list[VersionResponse]:
+        async with uow:
+            #TODO: ADD OP TYPE VIEW FILE VERSIONS
+            # self.logbook.register_log(
+            # uow=uow,
+            #     op_type=OpType.VIEW_FILE_VERSIONS,
+            #     user_id=user_id,
+            #     remote_addr=ip,
+            #     user_agent=user_agent,
+            #     session_id=session_id,
+            #     details={
+            #         "file_id": str(file_id),
+            #         "status": "initiated"
+            #     }
+            # )
+            file = await uow.files.get_by_id(file_id)
+            if not file:
+                raise FileNotFoundError(detail=f"File with id {file_id} not found.")
+            if file.owner_id != user_id:
+                raise AccessDeniedError(detail="Access denied to view this file's versions.")
+            
+            versions = await uow.file_versions.list_by_file_id(file_id)
+            # self.logbook.register_log(
+            #     uow=uow,
+            #     op_type=OpType.LIST_FILES,
+            #     user_id=user_id,
+            #     remote_addr=ip,
+            #     user_agent=user_agent,
+            #     session_id=session_id,
+            #     details={
+            #         "file_id": str(file_id),
+            #         "status": "completed",
+            #         "version_count": len(versions),
+            #         "operation": "view_versions"
+            #     }
+            # )
+            
+            res = []
+            for v in versions:
+                size_bytes = v.blob.size_bytes if v.blob else 0
+
+                res.append(VersionResponse(
+                    id=v.id,
+                    version_no=v.version_no,
+                    uploaded_at=v.uploaded_at,
+                    uploaded_by=v.uploaded_by,
+                    size_bytes=size_bytes,
+                ))        
+        
+        return res
