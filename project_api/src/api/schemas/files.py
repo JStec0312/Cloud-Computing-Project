@@ -39,3 +39,7 @@ class VersionResponse(BaseModel):
 
 class RenameFileRequest(BaseModel):
     new_name: str = Field(..., min_length=1, max_length=255, description="Nowa nazwa pliku (z rozszerzeniem!)")
+
+class CreateFolderRequest(BaseModel):
+    folder_name: str = Field(..., min_length=1, max_length=255, description="Nazwa folderu")
+    parent_folder_id: Optional[UUID] = Field(None, description="ID nowego folderu nadrzędnego. Jeśli brak - przenosi do Root.")

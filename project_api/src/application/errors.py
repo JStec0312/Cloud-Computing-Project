@@ -70,3 +70,8 @@ class AccessDeniedError(Exception):
     def __init__(self, detail: str = "Access denied"):
         self.status_code = 403
         self.detail = detail
+
+class FolderNameExistsError(Exception):
+    def __init__(self, detail: str = "Folder name already exists in the target folder"):
+        self.status_code = 409
+        self.detail = detail

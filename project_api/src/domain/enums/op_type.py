@@ -13,3 +13,5 @@ class OpType(enum.Enum):
     FILE_UPLOAD_ATTEMPT="file_upload_attempt"
     RENAME="rename"
     FILE_DELETE="file_delete"
+    VIEW_FILE_VERSIONS="view_file_versions"
+    FOLDER_CREATE="folder_create"

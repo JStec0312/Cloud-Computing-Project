@@ -5,7 +5,7 @@ from src.application.logbook_service import LogbookService
 from src.domain.entities.blob import Blob
 import hashlib
 from fastapi import UploadFile
-from src.application.errors import FileTooLargeError, FolderNotFoundError, InvalidParentFolder, FileNotFoundError, AccessDeniedError
+from src.application.errors import FileTooLargeError, FolderNameExistsError, FolderNotFoundError, InvalidParentFolder, FileNotFoundError, AccessDeniedError
 from src.domain.enums.op_type import OpType
 from src.domain.entities.file import File
 from src.domain.entities.file_version import FileVersion
@@ -357,19 +357,18 @@ class FileService:
         
     async def get_file_versions(self, uow: SqlAlchemyUoW, file_id: UUID, user_id: UUID, ip: str, user_agent: str, session_id: Optional[UUID] = None) -> list[VersionResponse]:
         async with uow:
-            #TODO: ADD OP TYPE VIEW FILE VERSIONS
-            # self.logbook.register_log(
-            # uow=uow,
-            #     op_type=OpType.VIEW_FILE_VERSIONS,
-            #     user_id=user_id,
-            #     remote_addr=ip,
-            #     user_agent=user_agent,
-            #     session_id=session_id,
-            #     details={
-            #         "file_id": str(file_id),
-            #         "status": "initiated"
-            #     }
-            # )
+            self.logbook.register_log(
+            uow=uow,
+                op_type=OpType.VIEW_FILE_VERSIONS,
+                user_id=user_id,
+                remote_addr=ip,
+                user_agent=user_agent,
+                session_id=session_id,
+                details={
+                    "file_id": str(file_id),
+                    "status": "initiated"
+                }
+            )
             file = await uow.files.get_by_id(file_id)
             if not file:
                 raise FileNotFoundError(detail=f"File with id {file_id} not found.")
@@ -377,20 +376,20 @@ class FileService:
                 raise AccessDeniedError(detail="Access denied to view this file's versions.")
             
             versions = await uow.file_versions.list_by_file_id(file_id)
-            # self.logbook.register_log(
-            #     uow=uow,
-            #     op_type=OpType.LIST_FILES,
-            #     user_id=user_id,
-            #     remote_addr=ip,
-            #     user_agent=user_agent,
-            #     session_id=session_id,
-            #     details={
-            #         "file_id": str(file_id),
-            #         "status": "completed",
-            #         "version_count": len(versions),
-            #         "operation": "view_versions"
-            #     }
-            # )
+            self.logbook.register_log(
+                uow=uow,
+                op_type=OpType.LIST_FILES,
+                user_id=user_id,
+                remote_addr=ip,
+                user_agent=user_agent,
+                session_id=session_id,
+                details={
+                    "file_id": str(file_id),
+                    "status": "completed",
+                    "version_count": len(versions),
+                    "operation": "view_versions"
+                }
+            )
             
             res = []
             for v in versions:
@@ -405,3 +404,68 @@ class FileService:
                 ))        
         
         return res
+    
+    async def create_folder(
+        self,
+        uow: SqlAlchemyUoW,
+        user_id: UUID,
+        folder_name: str,
+        parent_folder_id: Optional[UUID],
+        ip: str,
+        user_agent: str,
+        session_id: Optional[UUID] = None
+    ):
+        async with uow:
+            self.logbook.register_log(
+                uow=uow,
+                op_type=OpType.FOLDER_CREATE, #TODO: add to OpType
+                user_id=user_id,
+                remote_addr=ip,
+                user_agent=user_agent,
+                session_id=session_id,
+                details={
+                    "folder_name": folder_name,
+                    "parent_folder_id": str(parent_folder_id) if parent_folder_id else "root",
+                    "status": "initiated"
+                }
+            )
+            if parent_folder_id:
+                found_parent_folder: File = await uow.files.get_by_id(parent_folder_id)
+                    
+                if not found_parent_folder:
+                    raise FolderNotFoundError(f"Parent folder with id {parent_folder_id} not found.")
+                if found_parent_folder.owner_id != user_id:
+                    raise AccessDeniedError("Access denied to this folder.")
+                if not found_parent_folder.is_folder:
+                    raise InvalidParentFolder(parent_folder_id, "Target is not a folder.")
+            
+        
+            existing_duplicate = await uow.files.get_by_name_and_parent(
+                owner_id=user_id,
+                name=folder_name,
+                parent_folder_id=parent_folder_id
+            )
+            if existing_duplicate:
+                raise FolderNameExistsError(f"Folder name '{folder_name}' already exists in the target folder.")
+            new_folder = File(
+                owner_id=user_id,
+                name=folder_name,
+                mime_type="inode/directory",
+                is_folder=True,
+                parent_folder_id=parent_folder_id,
+            )
+            await uow.files.add(new_folder)
+            self.logbook.register_log(
+                uow=uow,
+                op_type=OpType.FOLDER_CREATE,
+                user_id=user_id,
+                remote_addr=ip,     
+                user_agent=user_agent,
+                details={
+                    "folder_id": str(new_folder.id),
+                    "folder_name": folder_name,
+                    "parent_folder_id": str(parent_folder_id) if parent_folder_id else "root",
+                    "status": "completed"
+                }
+            )
+            return new_folder   

@@ -83,3 +83,21 @@ class FileRepo:
         return None
     
     
+    async def get_by_name_and_parent(
+        self,
+        owner_id: UUID,
+        name: str,
+        parent_folder_id: Optional[UUID]
+    ) -> Optional[File]:
+        stmnt = (
+            select(File)
+            .where(
+                File.owner_id == owner_id,
+                File.name == name,
+                File.parent_folder_id == parent_folder_id
+            )
+        )
+        result = await self.session.execute(stmnt)
+        return result.scalars().first()
+    
+    

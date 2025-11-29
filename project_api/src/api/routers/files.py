@@ -9,8 +9,8 @@ from typing import Annotated, Optional
 from src.rate_limiting import limiter
 import uuid
 from src.api.schemas.users import UserFromToken
-from src.application.errors import FileTooLargeError, FolderNotFoundError, InvalidParentFolder, FileNameExistsError, FileNotFoundError, AccessDeniedError
-from src.api.schemas.files import DirectoryListingResponse
+from src.application.errors import FileTooLargeError, FolderNotFoundError, InvalidParentFolder, FileNameExistsError, FileNotFoundError, AccessDeniedError, FolderNameExistsError
+from src.api.schemas.files import DirectoryListingResponse, CreateFolderRequest
 from uuid import UUID
 from src.config.app_config import settings
 
@@ -143,16 +143,31 @@ async def delete_file(
 
 @router.post("/folders", status_code=201)
 async def create_folder(
-    #body: CreateFolderRequest, 
+    body: CreateFolderRequest, 
     request: Request,
     current_user: UserFromToken = Depends(current_user),
     filesvc: FileService = Depends(get_file_service),
     uow: SqlAlchemyUoW = Depends(get_uow)
 ):
-    """
-    Tworzy nowy folder.
-    """
-    pass
+    try:
+        folder = await filesvc.create_folder(
+            uow=uow,
+            user_id=current_user.id,
+            folder_name=body.folder_name,
+            parent_folder_id=body.parent_folder_id,
+            ip=request.client.host,
+            user_agent=request.headers.get("user-agent"),
+        )
+        return folder
+    except FolderNameExistsError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+    except FolderNotFoundError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+    except AccessDeniedError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+    except InvalidParentFolder as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+
 
 
 @router.get("/{file_id}/versions", response_model=list[VersionResponse])
