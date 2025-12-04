@@ -125,7 +125,7 @@ async def download_file(
     uow: SqlAlchemyUoW = Depends(get_uow)
 ):
     try:
-        file_meta, file_stream = await filesvc.download_file(
+        file_meta, version_meta, file_stream = await filesvc.download_file(
             uow=uow,
             user_id=current_user.id,
             file_id=file_id,
@@ -246,9 +246,36 @@ async def download_file_version(
     filesvc: FileService = Depends(get_file_service),
     uow: SqlAlchemyUoW = Depends(get_uow)
 ):
-    """
-    Pobiera (ściąga) konkretną wersję pliku.
-    """
-    pass
+    try:
+        file_meta, version_meta, file_stream = await filesvc.download_file(
+            uow=uow,
+            user_id=current_user.id,
+            file_id=file_id,
+            version_id=version_id, # <--- Przekazujemy ID wersji
+            ip=request.client.host if request.client else "unknown",
+            user_agent=request.headers.get("user-agent", "unknown")
+        )
+        filename = file_meta.name
+        name_root, ext = os.path.splitext(filename)
+        if not ext:
+            if hasattr(file_meta, "extension") and file_meta.extension:
+                 ext = file_meta.extension
+            elif file_meta.mime_type:
+                 guessed = mimetypes.guess_extension(file_meta.mime_type)
+                 if guessed: ext = guessed
 
+        final_filename = f"{name_root}_v{version_meta.version_no}{ext}"
+        encoded_filename = quote(final_filename)
 
+        headers = {
+            "Content-Disposition": f"attachment; filename*=utf-8''{encoded_filename}"
+        }
+        
+        media_type = file_meta.mime_type if file_meta.mime_type else "application/octet-stream"
+
+        return StreamingResponse(file_stream, media_type=media_type, headers=headers)
+
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except AccessDeniedError as e:
+        raise HTTPException(status_code=403, detail=str(e))

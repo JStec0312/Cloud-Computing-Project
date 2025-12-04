@@ -483,7 +483,6 @@ class FileService:
             )
             return new_folder   
         
-
     async def download_file(
             self,
             uow: SqlAlchemyUoW,
@@ -491,42 +490,43 @@ class FileService:
             file_id: UUID,
             ip: str,
             user_agent: str,
+            version_id: Optional[UUID] = None, # Przesunąłem na koniec jako opcjonalny
             session_id: Optional[UUID] = None
-    ):
-        async with uow:
-            await self.logbook.register_log(
-                uow=uow,
-                op_type=OpType.DOWNLOAD,
-                user_id=user_id,
-                remote_addr=ip,
-                user_agent=user_agent,
-                session_id=session_id,
-                details={
-                    "file_id": str(file_id),
-                    "status": "initiated"
-                }
-            )
-            file_record = await uow.files.get_by_id(file_id)
-            if not file_record:
-                raise FileNotFoundError(detail=f"File with id {file_id} not found.")
-            if file_record.owner_id != user_id:
-                raise AccessDeniedError(detail="Access denied to download this file.")
-            
-            if not file_record.current_version or not file_record.current_version.blob:
-                raise FileNotFoundError(detail="File has no available versions to download.")
-            
-            file_stream =  self.storage.get(file_record.current_version.blob.sha256)
-            await self.logbook.register_log(
-                uow=uow,
-                op_type=OpType.DOWNLOAD,
-                user_id=user_id,
-                remote_addr=ip,
-                user_agent=user_agent,
-                session_id=session_id,
-                details={
-                    "status": "completed",
-                    "file_id": str(file_id),
-                    "version_no": file_record.current_version.version_no,
-                }
-            )
-            return file_record, file_stream
+        ):
+            async with uow:
+                file_record = await uow.files.get_by_id(file_id)
+                if not file_record:
+                    raise FileNotFoundError(detail=f"File with id {file_id} not found.")
+                if file_record.owner_id != user_id:
+                    raise AccessDeniedError(detail="Access denied.")
+                
+                target_version = None
+                if version_id:
+                    version = await uow.file_versions.get_by_id(version_id)
+                    if not version or version.file_id != file_record.id:
+                        raise FileNotFoundError(detail=f"Version {version_id} not found for this file.")
+                    target_version = version
+                else:
+                    if not file_record.current_version:
+                        raise FileNotFoundError(detail="File has no current version.")
+                    target_version = file_record.current_version
+
+                if not target_version.blob:
+                    raise FileNotFoundError(detail="Target version has no content (blob).")
+
+                await self.logbook.register_log(
+                    uow=uow,
+                    op_type=OpType.DOWNLOAD,
+                    user_id=user_id,
+                    remote_addr=ip,
+                    user_agent=user_agent,
+                    session_id=session_id,
+                    details={
+                        "file_id": str(file_id),
+                        "version_id": str(target_version.id),
+                        "version_no": target_version.version_no
+                    }
+                )
+
+                file_stream = self.storage.get(target_version.blob.sha256)
+                return file_record, target_version, file_stream

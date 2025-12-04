@@ -89,8 +89,8 @@ class TestDataSeed:
             parent_folder_id=parent_folder_id,
         )
         async with self.uow:
-            await self.uow.fil
-            current_version_id=file_version_id,es.add(file)
+            await self.uow.files.add(file)
+            current_version_id=file_version_id
             await self.uow.commit()
         return file
     
