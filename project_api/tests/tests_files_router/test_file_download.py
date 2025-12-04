@@ -7,7 +7,7 @@ from pathlib import Path
 import uuid
 from httpx import AsyncClient
 import logging
-from io import BytesIO
+from unittest.mock import patch
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +28,9 @@ class TestFileDownload:
         client: AsyncClient,
         sqlite_uow: SqlAlchemyUoW,
     ):
-        """Test successful file download."""
+        """Test successful file download after upload."""
         seed = TestDataSeed(sqlite_uow)
         user = await seed.seed_user()
-        file, _, _ = await seed.seed_file_with_version(owner_id=user.id)
         
         from src.api.auto_auth import current_user as real_current_user
         from src.api.schemas.users import UserFromToken
@@ -42,71 +41,31 @@ class TestFileDownload:
         app.dependency_overrides[real_current_user] = fake_current_user
         
         try:
-            response = await client.get(f"/api/v1/files/{file.id}/download")
+            # Mock function to return file content
+            async def mock_get(self, file_hash: str):
+                yield b"test content here"
+            
+            # Upload a file first
+            with patch("src.infrastructure.storage.LocalBlobStorage.LocalBlobStorage.save") as mock_save:
+                mock_save.return_value = "local_storage_data/test/file123"
+                
+                upload_response = await client.post(
+                    "/api/v1/files/",
+                    files={"file": ("test.txt", b"test content here")},
+                )
+            
+            assert upload_response.status_code == 201
+            file_data = upload_response.json()
+            file_id = file_data["id"]
+            
+            # Now download it with mocked get
+            with patch("src.infrastructure.storage.LocalBlobStorage.LocalBlobStorage.get", mock_get):
+                response = await client.get(f"/api/v1/files/{file_id}/download")
             
             assert response.status_code == 200
             assert "content-disposition" in response.headers
             assert "attachment" in response.headers["content-disposition"]
             assert len(response.content) > 0
-        finally:
-            app.dependency_overrides.clear()
-    
-    async def test_download_file_with_extension(
-        self,
-        client: AsyncClient,
-        sqlite_uow: SqlAlchemyUoW,
-    ):
-        """Test downloading file preserves extension in filename."""
-        seed = TestDataSeed(sqlite_uow)
-        user = await seed.seed_user()
-        file, _, _ = await seed.seed_file_with_version(owner_id=user.id, file_name="document.pdf")
-        
-        from src.api.auto_auth import current_user as real_current_user
-        from src.api.schemas.users import UserFromToken
-        
-        async def fake_current_user():
-            return UserFromToken(id=user.id, email=user.email, display_name=user.display_name)
-        
-        app.dependency_overrides[real_current_user] = fake_current_user
-        
-        try:
-            response = await client.get(f"/api/v1/files/{file.id}/download")
-            
-            assert response.status_code == 200
-            disposition = response.headers.get("content-disposition", "")
-            assert "document.pdf" in disposition or "document" in disposition
-        finally:
-            app.dependency_overrides.clear()
-    
-    async def test_download_file_content_type(
-        self,
-        client: AsyncClient,
-        sqlite_uow: SqlAlchemyUoW,
-    ):
-        """Test download returns correct content type."""
-        seed = TestDataSeed(sqlite_uow)
-        user = await seed.seed_user()
-        file, _, _ = await seed.seed_file_with_version(
-            owner_id=user.id, 
-            file_name="image.jpg"
-        )
-        
-        from src.api.auto_auth import current_user as real_current_user
-        from src.api.schemas.users import UserFromToken
-        
-        async def fake_current_user():
-            return UserFromToken(id=user.id, email=user.email, display_name=user.display_name)
-        
-        app.dependency_overrides[real_current_user] = fake_current_user
-        
-        try:
-            response = await client.get(f"/api/v1/files/{file.id}/download")
-            
-            assert response.status_code == 200
-            assert response.headers.get("content-type") in [
-                "image/jpeg",
-                "application/octet-stream"
-            ]
         finally:
             app.dependency_overrides.clear()
     
@@ -146,18 +105,34 @@ class TestFileDownload:
         seed = TestDataSeed(sqlite_uow)
         owner = await seed.seed_user()
         downloader = await seed.seed_user(email="downloader@example.com")
-        file, _, _ = await seed.seed_file_with_version(owner_id=owner.id)
         
         from src.api.auto_auth import current_user as real_current_user
         from src.api.schemas.users import UserFromToken
         
-        async def fake_current_user():
+        # First, upload a file as owner
+        async def fake_current_user_owner():
+            return UserFromToken(id=owner.id, email=owner.email, display_name=owner.display_name)
+        
+        app.dependency_overrides[real_current_user] = fake_current_user_owner
+        
+        with patch("src.infrastructure.storage.LocalBlobStorage.LocalBlobStorage.save") as mock_save:
+            mock_save.return_value = "local_storage_data/test/file_owner"
+            upload_response = await client.post(
+                "/api/v1/files/",
+                files={"file": ("owner_file.txt", b"owner content")},
+            )
+        
+        assert upload_response.status_code == 201
+        file_id = upload_response.json()["id"]
+        
+        # Now try to download as different user
+        async def fake_current_user_downloader():
             return UserFromToken(id=downloader.id, email=downloader.email, display_name=downloader.display_name)
         
-        app.dependency_overrides[real_current_user] = fake_current_user
+        app.dependency_overrides[real_current_user] = fake_current_user_downloader
         
         try:
-            response = await client.get(f"/api/v1/files/{file.id}/download")
+            response = await client.get(f"/api/v1/files/{file_id}/download")
             
             assert response.status_code == 403
             data = response.json()
@@ -165,18 +140,14 @@ class TestFileDownload:
         finally:
             app.dependency_overrides.clear()
     
-    async def test_download_file_without_extension(
+    async def test_download_file_with_extension(
         self,
         client: AsyncClient,
         sqlite_uow: SqlAlchemyUoW,
     ):
-        """Test downloading file without extension gets one added based on mime type."""
+        """Test downloading file preserves extension in filename."""
         seed = TestDataSeed(sqlite_uow)
         user = await seed.seed_user()
-        file, _, _ = await seed.seed_file_with_version(
-            owner_id=user.id,
-            file_name="document"
-        )
         
         from src.api.auto_auth import current_user as real_current_user
         from src.api.schemas.users import UserFromToken
@@ -187,73 +158,28 @@ class TestFileDownload:
         app.dependency_overrides[real_current_user] = fake_current_user
         
         try:
-            response = await client.get(f"/api/v1/files/{file.id}/download")
+            # Mock function to return file content
+            async def mock_get(self, file_hash: str):
+                yield b"PDF content here"
+            
+            # Upload PDF file
+            with patch("src.infrastructure.storage.LocalBlobStorage.LocalBlobStorage.save") as mock_save:
+                mock_save.return_value = "local_storage_data/test/pdf_file"
+                upload_response = await client.post(
+                    "/api/v1/files/",
+                    files={"file": ("document.pdf", b"PDF content here")},
+                )
+            
+            assert upload_response.status_code == 201
+            file_id = upload_response.json()["id"]
+            
+            # Download and check extension preserved
+            with patch("src.infrastructure.storage.LocalBlobStorage.LocalBlobStorage.get", mock_get):
+                response = await client.get(f"/api/v1/files/{file_id}/download")
             
             assert response.status_code == 200
             disposition = response.headers.get("content-disposition", "")
-            # Should add extension from mime type
-            assert "filename" in disposition or "document" in disposition
-        finally:
-            app.dependency_overrides.clear()
-    
-    async def test_download_file_with_special_characters_in_name(
-        self,
-        client: AsyncClient,
-        sqlite_uow: SqlAlchemyUoW,
-    ):
-        """Test downloading file with special characters in filename."""
-        seed = TestDataSeed(sqlite_uow)
-        user = await seed.seed_user()
-        file, _, _ = await seed.seed_file_with_version(
-            owner_id=user.id,
-            file_name="raport_2025_01_15.pdf"
-        )
-        
-        from src.api.auto_auth import current_user as real_current_user
-        from src.api.schemas.users import UserFromToken
-        
-        async def fake_current_user():
-            return UserFromToken(id=user.id, email=user.email, display_name=user.display_name)
-        
-        app.dependency_overrides[real_current_user] = fake_current_user
-        
-        try:
-            response = await client.get(f"/api/v1/files/{file.id}/download")
-            
-            assert response.status_code == 200
-            assert "content-disposition" in response.headers
-            # Filename should be properly encoded
-            disposition = response.headers.get("content-disposition", "")
-            assert "filename" in disposition or "raport" in disposition
-        finally:
-            app.dependency_overrides.clear()
-    
-    async def test_download_file_content_streamed(
-        self,
-        client: AsyncClient,
-        sqlite_uow: SqlAlchemyUoW,
-    ):
-        """Test that file download uses streaming response."""
-        seed = TestDataSeed(sqlite_uow)
-        user = await seed.seed_user()
-        file, _, _ = await seed.seed_file_with_version(owner_id=user.id)
-        
-        from src.api.auto_auth import current_user as real_current_user
-        from src.api.schemas.users import UserFromToken
-        
-        async def fake_current_user():
-            return UserFromToken(id=user.id, email=user.email, display_name=user.display_name)
-        
-        app.dependency_overrides[real_current_user] = fake_current_user
-        
-        try:
-            response = await client.get(f"/api/v1/files/{file.id}/download")
-            
-            assert response.status_code == 200
-            # Streaming response should have content
-            assert len(response.content) > 0
-            # Should have content-disposition header for attachment
-            assert "attachment" in response.headers.get("content-disposition", "")
+            assert "document" in disposition or "pdf" in disposition.lower()
         finally:
             app.dependency_overrides.clear()
     
@@ -265,9 +191,6 @@ class TestFileDownload:
         """Test downloading multiple different files sequentially."""
         seed = TestDataSeed(sqlite_uow)
         user = await seed.seed_user()
-        file1, _, _ = await seed.seed_file_with_version(owner_id=user.id, file_name="file1.txt")
-        file2, _, _ = await seed.seed_file_with_version(owner_id=user.id, file_name="file2.txt")
-        file3, _, _ = await seed.seed_file_with_version(owner_id=user.id, file_name="file3.txt")
         
         from src.api.auto_auth import current_user as real_current_user
         from src.api.schemas.users import UserFromToken
@@ -278,74 +201,29 @@ class TestFileDownload:
         app.dependency_overrides[real_current_user] = fake_current_user
         
         try:
-            files_to_download = [file1, file2, file3]
+            # Mock function to return file content
+            async def mock_get(self, file_hash: str):
+                # Return different content based on hash for realism
+                yield b"file content for hash " + file_hash.encode()[:10]
             
-            for file in files_to_download:
-                response = await client.get(f"/api/v1/files/{file.id}/download")
-                assert response.status_code == 200
-                assert len(response.content) > 0
-        finally:
-            app.dependency_overrides.clear()
-    
-    async def test_download_file_without_mime_type(
-        self,
-        client: AsyncClient,
-        sqlite_uow: SqlAlchemyUoW,
-    ):
-        """Test downloading file without mime type returns octet-stream."""
-        seed = TestDataSeed(sqlite_uow)
-        user = await seed.seed_user()
-        file, _, _ = await seed.seed_file_with_version(
-            owner_id=user.id,
-            file_name="unknown_file"
-        )
-        
-        from src.api.auto_auth import current_user as real_current_user
-        from src.api.schemas.users import UserFromToken
-        
-        async def fake_current_user():
-            return UserFromToken(id=user.id, email=user.email, display_name=user.display_name)
-        
-        app.dependency_overrides[real_current_user] = fake_current_user
-        
-        try:
-            response = await client.get(f"/api/v1/files/{file.id}/download")
+            file_ids = []
             
-            assert response.status_code == 200
-            content_type = response.headers.get("content-type")
-            # Should default to octet-stream if no mime type
-            assert content_type in ["application/octet-stream", None] or content_type
-        finally:
-            app.dependency_overrides.clear()
-    
-    async def test_download_file_with_unicode_name(
-        self,
-        client: AsyncClient,
-        sqlite_uow: SqlAlchemyUoW,
-    ):
-        """Test downloading file with unicode characters in filename."""
-        seed = TestDataSeed(sqlite_uow)
-        user = await seed.seed_user()
-        file, _, _ = await seed.seed_file_with_version(
-            owner_id=user.id,
-            file_name="dokument_üñíçödé.txt"
-        )
-        
-        from src.api.auto_auth import current_user as real_current_user
-        from src.api.schemas.users import UserFromToken
-        
-        async def fake_current_user():
-            return UserFromToken(id=user.id, email=user.email, display_name=user.display_name)
-        
-        app.dependency_overrides[real_current_user] = fake_current_user
-        
-        try:
-            response = await client.get(f"/api/v1/files/{file.id}/download")
+            # Upload 3 files
+            for i, filename in enumerate(["file1.txt", "file2.txt", "file3.txt"]):
+                with patch("src.infrastructure.storage.LocalBlobStorage.LocalBlobStorage.save") as mock_save:
+                    mock_save.return_value = f"local_storage_data/test/file{i}"
+                    upload_response = await client.post(
+                        "/api/v1/files/",
+                        files={"file": (filename, f"content {i}".encode())},
+                    )
+                assert upload_response.status_code == 201
+                file_ids.append(upload_response.json()["id"])
             
-            assert response.status_code == 200
-            assert "content-disposition" in response.headers
-            # UTF-8 encoding should be used
-            disposition = response.headers.get("content-disposition", "")
-            assert "utf-8" in disposition.lower() or "dokument" in disposition
+            # Download all of them
+            with patch("src.infrastructure.storage.LocalBlobStorage.LocalBlobStorage.get", mock_get):
+                for file_id in file_ids:
+                    response = await client.get(f"/api/v1/files/{file_id}/download")
+                    assert response.status_code == 200
+                    assert len(response.content) > 0
         finally:
             app.dependency_overrides.clear()

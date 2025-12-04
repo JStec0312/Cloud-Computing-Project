@@ -56,13 +56,11 @@ class TestDataSeed:
     
     async def seed_blob(
         self,
-        sha256: Optional[str] = None,
+        sha256: str = "test_hash_123",
         size_bytes: int = 1024,
         storage_path: str = "local_storage_data/test/blob",
     ) -> Blob:
         """Seed a blob into the database."""
-        if sha256 is None:
-            sha256 = uuid.uuid4().hex * 2  
         blob = BlobFactory.create(
             sha256=sha256,
             size_bytes=size_bytes,
@@ -81,7 +79,8 @@ class TestDataSeed:
         is_folder: bool = False,
         parent_folder_id: Optional[uuid.UUID] = None,
     ) -> File:
-        """Seed a file into the database."""
+
+        file_version_id: Optional[uuid.UUID] = None,        """Seed a file into the database."""
         file = FileFactory.create(
             owner_id=owner_id,
             name=name,
@@ -90,7 +89,8 @@ class TestDataSeed:
             parent_folder_id=parent_folder_id,
         )
         async with self.uow:
-            await self.uow.files.add(file)
+            await self.uow.fil
+            current_version_id=file_version_id,es.add(file)
             await self.uow.commit()
         return file
     
