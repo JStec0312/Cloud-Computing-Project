@@ -279,3 +279,37 @@ async def download_file_version(
         raise HTTPException(status_code=404, detail=str(e))
     except AccessDeniedError as e:
         raise HTTPException(status_code=403, detail=str(e))
+    
+
+@router.post("/zip", status_code=200)
+async def upload_zip_file(
+    request: Request,
+    parent_id: Optional[UUID] = Form(None, description="ID folderu nadrzędnego. Jeśli brak - plik zostanie przesłany do Root."),
+    file: UploadFile = File(...),
+    current_user: UserFromToken = Depends(current_user),
+    filesvc: FileService = Depends(get_file_service),
+    uow: SqlAlchemyUoW = Depends(get_uow)
+):
+    ip = request.client.host if request.client else "unknown"
+    user_agent = request.headers.get("user-agent", "unknown")
+    if file.content_type not in ["application/zip", "application/x-zip-compressed", "application/octet-stream"]:
+        pass
+    try:
+        return await filesvc.upload_zip_folder(
+        uow=uow,
+        user_id = current_user.id,
+        file = file,
+        parent_folder_id = parent_id,
+        ip = ip,
+        user_agent = user_agent,
+        )
+    
+    #TODO Obslużyć wyjątki
+    except FileTooLargeError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+    except InvalidParentFolder as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+    except FolderNotFoundError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+    except FileNameExistsError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))

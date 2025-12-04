@@ -1,6 +1,5 @@
 import os
 from src.application.abstraction.IFileStorage import IBlobStorage
-from src.common.utils.time_utils import utcnow
 from src.infrastructure.uow import SqlAlchemyUoW
 from src.application.logbook_service import LogbookService
 from src.domain.entities.blob import Blob
@@ -10,14 +9,16 @@ from src.application.errors import FileTooLargeError, FolderNameExistsError, Fol
 from src.domain.enums.op_type import OpType
 from src.domain.entities.file import File
 from src.domain.entities.file_version import FileVersion
-from uuid import UUID
+from uuid import UUID, uuid4
 from src.api.schemas.files import VersionResponse
+import zipfile
+import mimetypes
+from pathlib import Path
 from typing import Optional
 from src.api.schemas.files import FileResponse
-import fastapi
 from src.config.app_config import settings
+import logging
 from src.application.errors import FileNameExistsError
-
 class FileService:
     def __init__(self, logbook: LogbookService, storage: IBlobStorage):
         self.logbook = logbook
@@ -528,5 +529,184 @@ class FileService:
                     }
                 )
 
-                file_stream = self.storage.get(target_version.blob.sha256)
+                try:
+                    file_stream = self.storage.get(target_version.blob.sha256)
+                except FileNotFoundError:
+                    raise FileNotFoundError(detail="Blob not found in storage.")
                 return file_record, target_version, file_stream
+            
+    async def upload_zip_folder(
+            self, 
+            uow: SqlAlchemyUoW, 
+            user_id: UUID, 
+            file: UploadFile, 
+            parent_folder_id: Optional[UUID],
+            ip: str, 
+            user_agent: str
+        ):
+        MAX_ZIP_SIZE_MB = settings.max_file_upload_size_mb
+        processed_paths = set()
+        folder_map = {"": parent_folder_id}
+        created_files_count = 0
+
+
+        try:
+            exists = await uow.files.get_by_name_and_parent(
+                owner_id=user_id,
+                name=file.filename,
+                parent_folder_id=parent_folder_id
+            )
+            if exists:
+                raise FileNameExistsError(detail=f"An item named '{file.filename}' already exists in the target folder.")
+
+            with zipfile.ZipFile(file.file, 'r') as zip_ref:
+                zip_contents = sorted(zip_ref.infolist(), key=lambda x: x.filename)
+                total_uncompressed_size = sum(zinfo.file_size for zinfo in zip_ref.infolist())
+                if total_uncompressed_size > MAX_ZIP_SIZE_MB * 1024 * 1024:
+                    raise FileTooLargeError(detail=f"Total uncompressed size of zip contents exceeds the limit of {MAX_ZIP_SIZE_MB} MB.")
+                async with uow:
+                    for member in zip_contents:
+                        filename = member.filename
+                        if filename in processed_paths:
+                            continue
+                        processed_paths.add(filename)
+                        # Zip slip vulnerability check
+                        if filename.startswith("/") or ".." in filename:
+                            continue
+                        
+                        if "__MACOSX" in filename or ".DS_Store" in filename:
+                            continue
+
+                        path_parts = filename.rstrip("/").split("/") # podział na części ścieżki /wakacje/zdjecie.jpg -> ["wakacje", "zdjecie.jpg"]
+
+                        if member.is_dir():
+                            current_path_str = filename.rstrip("/") 
+                            parent_path_str = "/".join(path_parts[:-1]) # Ścieżka rodzica
+                            folder_name = path_parts[-1] # Nazwa bieżącego folderu
+                            # Znajdź ID folderu rodzica
+                            parent_db_id = folder_map.get(parent_path_str, parent_folder_id)
+                            folder_uuid = await self._get_or_create_folder(
+                                uow, user_id, folder_name, parent_db_id
+                            )
+                            
+                            folder_map[current_path_str] = folder_uuid
+
+                        else:
+                            # TO JEST PLIK
+                            file_name = path_parts[-1]
+                            parent_path_str = "/".join(path_parts[:-1])
+                            
+                            # Znajdź folder rodzica
+                            parent_db_id = folder_map.get(parent_path_str)
+                            
+                            if parent_db_id is None:
+                                parent_db_id = parent_folder_id
+                            with zip_ref.open(member) as source_stream:
+                                ext = os.path.splitext(file_name)[1].lower()
+                                mime = mimetypes.types_map.get(ext, "application/octet-stream")
+
+                                await self._save_zip_member_as_file(
+                                    uow, user_id, source_stream, file_name, 
+                                    parent_db_id, mime, ext, ip, user_agent
+                                )
+                                created_files_count += 1
+
+                    await uow.commit()
+
+        except zipfile.BadZipFile as e:
+            raise zipfile.BadZipFile()
+
+        return {"status": "success", "imported_files": created_files_count}
+
+
+    async def _get_or_create_folder(self, uow:SqlAlchemyUoW, user_id, name, parent_id) -> UUID:
+        """Sprawdza czy folder istnieje, jak nie to tworzy."""
+        existing = await uow.files.get_by_owner_and_name(
+            owner_id=user_id,
+            name=name,
+            parent_id=parent_id
+        )
+        
+        if existing and existing.is_folder:
+            return existing.id
+        
+        new_folder = File(
+            id = uuid4(),
+            owner_id=user_id,
+            name=name,
+            is_folder=True,
+            parent_folder_id=parent_id,
+            mime_type="application/directory" ,
+        )
+        await uow.files.add(new_folder) 
+        return new_folder.id
+
+    async def _save_zip_member_as_file(
+        self, uow: SqlAlchemyUoW, user_id, stream, filename, parent_id, mime, ext, ip, user_agent
+    ):
+        import hashlib
+        import io
+        sha256 = hashlib.sha256()
+        size_bytes = 0
+        content_chunks = []
+        
+        while chunk := stream.read(1024 * 1024):
+            sha256.update(chunk)
+            size_bytes += len(chunk)
+            content_chunks.append(chunk)
+            
+        sha256_hash = sha256.hexdigest()
+
+        blob = await uow.blobs.get_by_hash(sha256_hash)
+        
+        if not blob:
+            full_content = b"".join(content_chunks)
+            file_obj = io.BytesIO(full_content)
+            
+            storage_path = await self.storage.save(file_obj, sha256_hash)
+            
+            blob = Blob(
+                id=uuid4(),  
+                sha256=sha256_hash,
+                size_bytes=size_bytes,
+                storage_path=storage_path
+            )
+            await uow.blobs.add(blob)
+
+        existing_file = await uow.files.get_by_owner_and_name(user_id, filename, parent_id)
+        
+        if existing_file:
+            existing_file.extension = ext
+            existing_file.mime_type = mime
+            max_ver = await uow.file_versions.get_highest_version_no(existing_file.id)
+            new_version_no = (max_ver if max_ver is not None else 0) + 1
+            
+            ver = FileVersion(
+                file_id=existing_file.id,
+                version_no=new_version_no,
+                uploaded_by=user_id,
+                blob_id=blob.id
+            )
+            await uow.file_versions.add(ver)
+            
+        else:
+            # TWORZENIE NOWEGO PLIKU
+            new_file = File(
+                id=uuid4(),
+                owner_id=user_id,
+                name=filename,
+                mime_type=mime,
+                extension=ext,
+                is_folder=False,
+                parent_folder_id=parent_id,
+                size_bytes=size_bytes
+            )
+            await uow.files.add(new_file)            
+            ver = FileVersion(
+                file_id=new_file.id,
+                version_no=1,
+                uploaded_by=user_id,
+                blob_id=blob.id,
+                size_bytes=size_bytes
+            )
+            await uow.file_versions.add(ver)
