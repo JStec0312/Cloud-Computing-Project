@@ -21,7 +21,7 @@ class File(Base):
     created_at: Mapped[str] = mapped_column(TIMESTAMP(timezone=False), nullable=False, server_default=text("now()"))
     parent_folder_id: Mapped[Optional[uuid.UUID]] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("files.id", ondelete="SET NULL"), nullable=True)
     is_folder: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
-
+    extension: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     owner: Mapped[Optional["User"]] = relationship(back_populates="owned_files")
     versions: Mapped[List["FileVersion"]] = relationship(back_populates="file", cascade="all, delete-orphan", foreign_keys="FileVersion.file_id", primaryjoin="File.id==FileVersion.file_id")
     current_version: Mapped[Optional["FileVersion"]] = relationship(foreign_keys="File.current_version_id", primaryjoin="File.current_version_id==FileVersion.id", post_update=True)

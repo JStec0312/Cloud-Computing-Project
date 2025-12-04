@@ -52,7 +52,8 @@ class RefreshTokenRepo:
         #             )  
         stmt = update(RefreshToken).\
             where(
-                RefreshToken.user_id == user_id
+                RefreshToken.user_id == user_id,
+                RefreshToken.revoked_at.is_(None)
             ).\
             values(
                 revoked_at=sqlalchemy.func.now()

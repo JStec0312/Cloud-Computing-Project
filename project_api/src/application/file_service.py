@@ -1,3 +1,4 @@
+import os
 from src.application.abstraction.IFileStorage import IBlobStorage
 from src.common.utils.time_utils import utcnow
 from src.infrastructure.uow import SqlAlchemyUoW
@@ -33,13 +34,22 @@ class FileService:
         session_id: Optional[UUID] = None
     ):
         
-        content = await file.read()
-        size_bytes = len(content)
+        sha256 = hashlib.sha256()
+        size_bytes = 0
         max_size_bytes = settings.max_file_upload_size_mb * 1024 * 1024
-        if size_bytes > max_size_bytes:
-            raise FileTooLargeError()
-        sha256_hash = hashlib.sha256(content).hexdigest()
-        await file.seek(0) 
+        
+        # Czytamy plik w kawałkach po 1MB
+        while chunk := await file.read(1024 * 1024):
+            sha256.update(chunk)
+            size_bytes += len(chunk)
+            if size_bytes > max_size_bytes:
+                raise FileTooLargeError()
+
+        sha256_hash = sha256.hexdigest()
+        await file.seek(0)
+        mime_type = file.content_type
+        _, extension = os.path.splitext(file.filename)
+        extension = extension.lower() if extension else ''
 
         async with uow:
             await self.logbook.register_log(
@@ -91,6 +101,8 @@ class FileService:
 
             if existing_file:
                 target_file_id = existing_file.id
+                existing_file.extension = extension
+                existing_file.mime_type = file.content_type
                 if existing_file.current_version:
                     new_version_no = existing_file.current_version.version_no + 1
                 else:
@@ -103,6 +115,7 @@ class FileService:
                     owner_id=user_id,
                     name=file.filename,
                     mime_type=file.content_type,
+                    extension=extension,
                     is_folder=False,
                     parent_folder_id=parent_folder_id,
                 )
@@ -469,3 +482,51 @@ class FileService:
                 }
             )
             return new_folder   
+        
+
+    async def download_file(
+            self,
+            uow: SqlAlchemyUoW,
+            user_id: UUID,
+            file_id: UUID,
+            ip: str,
+            user_agent: str,
+            session_id: Optional[UUID] = None
+    ):
+        async with uow:
+            await self.logbook.register_log(
+                uow=uow,
+                op_type=OpType.DOWNLOAD,
+                user_id=user_id,
+                remote_addr=ip,
+                user_agent=user_agent,
+                session_id=session_id,
+                details={
+                    "file_id": str(file_id),
+                    "status": "initiated"
+                }
+            )
+            file_record = await uow.files.get_by_id(file_id)
+            if not file_record:
+                raise FileNotFoundError(detail=f"File with id {file_id} not found.")
+            if file_record.owner_id != user_id:
+                raise AccessDeniedError(detail="Access denied to download this file.")
+            
+            if not file_record.current_version or not file_record.current_version.blob:
+                raise FileNotFoundError(detail="File has no available versions to download.")
+            
+            file_stream =  self.storage.get(file_record.current_version.blob.sha256)
+            await self.logbook.register_log(
+                uow=uow,
+                op_type=OpType.DOWNLOAD,
+                user_id=user_id,
+                remote_addr=ip,
+                user_agent=user_agent,
+                session_id=session_id,
+                details={
+                    "status": "completed",
+                    "file_id": str(file_id),
+                    "version_no": file_record.current_version.version_no,
+                }
+            )
+            return file_record, file_stream

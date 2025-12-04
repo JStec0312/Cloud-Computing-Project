@@ -312,3 +312,6 @@ class AuthService:
 
 
 		
+	async def revoke_all_refresh_tokens(self,userId, uow: SqlAlchemyUoW):
+		async with uow:
+			await self._refresh_token_svc.revoke_all_user_tokens(uow= uow, user_id=userId)

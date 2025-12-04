@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 import logging
+from src.api.auto_auth import current_user
+from src.api.schemas.users import UserFromToken
 from src.deps import get_uow, get_auth_service
 from src.application.errors import (InvalidCredentialsError, RefreshTokenError,
     RefreshTokenMissingError, UserAlreadyExistsError, UserNotFoundError)
@@ -116,3 +118,15 @@ async def logout_user_ep(
 ):
     response.delete_cookie(settings.refresh_cookie_name)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+@router.post("/logout/all", status_code=status.HTTP_204_NO_CONTENT)
+async def logout_user_all_ep(
+    response: Response,
+    uow: SqlAlchemyUoW = Depends(get_uow),
+    auth: AuthService = Depends(get_auth_service),
+    current_user: UserFromToken = Depends(current_user),
+    
+):
+    await auth.revoke_all_refresh_tokens(current_user.id, uow)
+    response.delete_cookie(settings.refresh_cookie_name)
+    

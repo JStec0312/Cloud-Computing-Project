@@ -1,4 +1,9 @@
+import mimetypes
+import os
 from fastapi import APIRouter, Depends, Header, Request, File, UploadFile, Form, Query, Cookie, HTTPException
+from urllib.parse import quote
+
+from fastapi.responses import StreamingResponse
 from src.deps import get_uow
 from src.api.schemas.files import  RenameFileRequest, FileResponse, VersionResponse
 from src.infrastructure.uow import SqlAlchemyUoW
@@ -111,10 +116,48 @@ async def rename_file(
 
 
 
-@router.get("/{file_id}/download")
-async def download_file():
-    pass
+@router.get("/{file_id}/download", status_code=200)
+async def download_file(
+    file_id: UUID,
+    request: Request,
+    current_user: UserFromToken = Depends(current_user),
+    filesvc: FileService = Depends(get_file_service),
+    uow: SqlAlchemyUoW = Depends(get_uow)
+):
+    try:
+        file_meta, file_stream = await filesvc.download_file(
+            uow=uow,
+            user_id=current_user.id,
+            file_id=file_id,
+            ip=request.client.host if request.client else "unknown",
+            user_agent=request.headers.get("user-agent", "unknown")
+        )
+        final_filename = file_meta.name
+        _, ext = os.path.splitext(final_filename)
+        
+        if not ext:
+            if hasattr(file_meta, "extension") and file_meta.extension:
+                 final_filename += file_meta.extension
+            
+            elif file_meta.mime_type:
+                 guessed_ext = mimetypes.guess_extension(file_meta.mime_type)
+                 if guessed_ext:
+                     final_filename += guessed_ext
 
+        encoded_filename = quote(final_filename)
+        
+        headers = {
+            "Content-Disposition": f"attachment; filename*=utf-8''{encoded_filename}"
+        }
+
+        media_type = file_meta.mime_type if file_meta.mime_type else "application/octet-stream"
+
+        return StreamingResponse(file_stream, media_type=media_type, headers=headers)
+
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) # Zmieniłem na 404
+    except AccessDeniedError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
 
 @router.delete("/{file_id}", status_code=204)
 async def delete_file(
