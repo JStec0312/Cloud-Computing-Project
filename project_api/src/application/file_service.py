@@ -18,7 +18,19 @@ from typing import Optional
 from src.api.schemas.files import FileResponse
 from src.config.app_config import settings
 import logging
+import io
 from src.application.errors import FileNameExistsError
+
+class AsyncBytesIO(io.BytesIO):
+    """
+    Adapter, który sprawia, że zwykłe BytesIO ma asynchroniczną metodę read.
+    Dzięki temu LocalBlobStorage (który oczekuje await) nie zgłupieje.
+    """
+    async def read(self, size=-1):
+        return super().read(size)
+    
+
+
 class FileService:
     def __init__(self, logbook: LogbookService, storage: IBlobStorage):
         self.logbook = logbook
@@ -225,7 +237,7 @@ class FileService:
                     "size_bytes": size,
                 })
 
-            self.logbook.register_log(
+            await self.logbook.register_log(
                 uow=uow,
                 op_type=OpType.LIST_FILES,
                 session_id=session_id,
@@ -353,7 +365,9 @@ class FileService:
                 raise FileNotFoundError(detail=f"File with id {file_id} not found.")
             if file.owner_id != user_id:
                 raise AccessDeniedError(detail="Access denied to delete this file.")
-            
+            if file.is_folder:
+                for child in await uow.files.list_in_folder(user_id, file.id):
+                    await self.delete_file(uow, user_id, child.id, ip, user_agent, session_id)
             await uow.files.delete(file)
             self.logbook.register_log(
                 uow=uow,
@@ -551,20 +565,21 @@ class FileService:
 
 
         try:
-            exists = await uow.files.get_by_name_and_parent(
-                owner_id=user_id,
-                name=file.filename,
-                parent_folder_id=parent_folder_id
-            )
-            if exists:
-                raise FileNameExistsError(detail=f"An item named '{file.filename}' already exists in the target folder.")
+            async with uow:
 
-            with zipfile.ZipFile(file.file, 'r') as zip_ref:
-                zip_contents = sorted(zip_ref.infolist(), key=lambda x: x.filename)
-                total_uncompressed_size = sum(zinfo.file_size for zinfo in zip_ref.infolist())
-                if total_uncompressed_size > MAX_ZIP_SIZE_MB * 1024 * 1024:
-                    raise FileTooLargeError(detail=f"Total uncompressed size of zip contents exceeds the limit of {MAX_ZIP_SIZE_MB} MB.")
-                async with uow:
+                exists = await uow.files.get_by_name_and_parent(
+                    owner_id=user_id,
+                    name=file.filename,
+                    parent_folder_id=parent_folder_id
+                )
+                if exists:
+                    raise FileNameExistsError(detail=f"An item named '{file.filename}' already exists in the target folder.")
+
+                with zipfile.ZipFile(file.file, 'r') as zip_ref:
+                    zip_contents = sorted(zip_ref.infolist(), key=lambda x: x.filename)
+                    total_uncompressed_size = sum(zinfo.file_size for zinfo in zip_ref.infolist())
+                    if total_uncompressed_size > MAX_ZIP_SIZE_MB * 1024 * 1024:
+                        raise FileTooLargeError(detail=f"Total uncompressed size of zip contents exceeds the limit of {MAX_ZIP_SIZE_MB} MB.")
                     for member in zip_contents:
                         filename = member.filename
                         if filename in processed_paths:
@@ -611,8 +626,6 @@ class FileService:
                                 )
                                 created_files_count += 1
 
-                    await uow.commit()
-
         except zipfile.BadZipFile as e:
             raise zipfile.BadZipFile()
 
@@ -645,7 +658,6 @@ class FileService:
         self, uow: SqlAlchemyUoW, user_id, stream, filename, parent_id, mime, ext, ip, user_agent
     ):
         import hashlib
-        import io
         sha256 = hashlib.sha256()
         size_bytes = 0
         content_chunks = []
@@ -658,15 +670,15 @@ class FileService:
         sha256_hash = sha256.hexdigest()
 
         blob = await uow.blobs.get_by_hash(sha256_hash)
-        
+        blob_id = blob.id if blob else None
         if not blob:
             full_content = b"".join(content_chunks)
-            file_obj = io.BytesIO(full_content)
+            file_obj = AsyncBytesIO(full_content)
             
             storage_path = await self.storage.save(file_obj, sha256_hash)
-            
+            blob_id = uuid4()
             blob = Blob(
-                id=uuid4(),  
+                id=blob_id,  
                 sha256=sha256_hash,
                 size_bytes=size_bytes,
                 storage_path=storage_path
@@ -691,22 +703,29 @@ class FileService:
             
         else:
             # TWORZENIE NOWEGO PLIKU
+            new_file_id = uuid4()
+            new_version_id = uuid4()
             new_file = File(
-                id=uuid4(),
+                id=new_file_id,
                 owner_id=user_id,
                 name=filename,
                 mime_type=mime,
                 extension=ext,
                 is_folder=False,
                 parent_folder_id=parent_id,
-                size_bytes=size_bytes
             )
-            await uow.files.add(new_file)            
+            await uow.files.add(new_file)   
+            logging.debug(f"Created new file {filename} with ID {new_file.id} in parent {parent_id}")
+            logging.debug("size bytes: ", size_bytes)  
             ver = FileVersion(
+                id =new_version_id,
                 file_id=new_file.id,
                 version_no=1,
                 uploaded_by=user_id,
-                blob_id=blob.id,
-                size_bytes=size_bytes
+                blob_id=blob_id,
+                # size_bytes=size_bytes
             )
             await uow.file_versions.add(ver)
+            await uow.session.flush()
+
+            await uow.files.update_version(new_file.id, ver.id)

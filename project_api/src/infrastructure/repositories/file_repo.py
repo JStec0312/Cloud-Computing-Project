@@ -1,4 +1,4 @@
-from sqlalchemy import select, desc, asc
+from sqlalchemy import select, desc, asc, update
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -100,4 +100,12 @@ class FileRepo:
         result = await self.session.execute(stmnt)
         return result.scalars().first()
     
-    
+    async def update_version(self, file_id: UUID, new_version_id: UUID) -> None:
+        stmnt = (
+            update(File)
+            .where(File.id == file_id)
+            .values(current_version_id=new_version_id)
+            
+        )
+        result = await self.session.execute(stmnt)
+        return None

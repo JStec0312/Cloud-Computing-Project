@@ -23,8 +23,8 @@ class LocalBlobStorage(IBlobStorage):
         target_path.parent.mkdir(parents=True, exist_ok=True)
 
         async with aiofiles.open(target_path, 'wb') as f:
-            while chunk := file_stream.read(1024 * 1024): # 1MB chunks
-                f.write(chunk)
+            while chunk := await file_stream.read(1024 * 1024): # 1MB chunks
+                await f.write(chunk)
         
         return str(target_path)
 
