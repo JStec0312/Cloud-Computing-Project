@@ -560,74 +560,58 @@ class FileService:
         ):
         MAX_ZIP_SIZE_MB = settings.max_file_upload_size_mb
         processed_paths = set()
-        folder_map = {"": parent_folder_id}
         created_files_count = 0
 
+        async with uow:
+            zip_stem = Path(file.filename).stem  # Ucina .zip
+            root_zip_folder_id = await self._get_or_create_folder(
+                uow, user_id, zip_stem, parent_folder_id
+            )
+            folder_map = {"": root_zip_folder_id}
 
-        try:
-            async with uow:
+            with zipfile.ZipFile(file.file, 'r') as zip_ref:
+                total_uncompressed_size = sum(zinfo.file_size for zinfo in zip_ref.infolist())
+                if total_uncompressed_size > MAX_ZIP_SIZE_MB * 1024 * 1024:
+                    raise FileTooLargeError(detail=f"Zip contents exceed limit of {MAX_ZIP_SIZE_MB} MB.")
+                
+                zip_contents = sorted(zip_ref.infolist(), key=lambda x: x.filename)
 
-                exists = await uow.files.get_by_name_and_parent(
-                    owner_id=user_id,
-                    name=file.filename,
-                    parent_folder_id=parent_folder_id
-                )
-                if exists:
-                    raise FileNameExistsError(detail=f"An item named '{file.filename}' already exists in the target folder.")
-
-                with zipfile.ZipFile(file.file, 'r') as zip_ref:
-                    zip_contents = sorted(zip_ref.infolist(), key=lambda x: x.filename)
-                    total_uncompressed_size = sum(zinfo.file_size for zinfo in zip_ref.infolist())
-                    if total_uncompressed_size > MAX_ZIP_SIZE_MB * 1024 * 1024:
-                        raise FileTooLargeError(detail=f"Total uncompressed size of zip contents exceeds the limit of {MAX_ZIP_SIZE_MB} MB.")
-                    for member in zip_contents:
-                        filename = member.filename
-                        if filename in processed_paths:
-                            continue
-                        processed_paths.add(filename)
-                        # Zip slip vulnerability check
-                        if filename.startswith("/") or ".." in filename:
-                            continue
-                        
-                        if "__MACOSX" in filename or ".DS_Store" in filename:
-                            continue
-
-                        path_parts = filename.rstrip("/").split("/") # podział na części ścieżki /wakacje/zdjecie.jpg -> ["wakacje", "zdjecie.jpg"]
-
-                        if member.is_dir():
-                            current_path_str = filename.rstrip("/") 
-                            parent_path_str = "/".join(path_parts[:-1]) # Ścieżka rodzica
-                            folder_name = path_parts[-1] # Nazwa bieżącego folderu
-                            # Znajdź ID folderu rodzica
-                            parent_db_id = folder_map.get(parent_path_str, parent_folder_id)
-                            folder_uuid = await self._get_or_create_folder(
-                                uow, user_id, folder_name, parent_db_id
-                            )
-                            
-                            folder_map[current_path_str] = folder_uuid
-
+                for member in zip_contents:
+                    filename = member.filename
+                    if filename in processed_paths: continue
+                    processed_paths.add(filename)
+                    if filename.startswith("/") or ".." in filename: continue
+                    if "__MACOSX" in filename or ".DS_Store" in filename: continue
+                    path_parts = filename.rstrip("/").split("/")
+                    # Startujemy od naszego nowego folderu-kontenera
+                    current_parent_id = root_zip_folder_id
+                    parts_to_process = path_parts if member.is_dir() else path_parts[:-1]
+                    
+                    for i, part_name in enumerate(parts_to_process):
+                        current_path_key = "/".join(path_parts[:i+1])
+                        found_id = folder_map.get(current_path_key)
+                        if found_id:
+                            current_parent_id = found_id
                         else:
-                            # TO JEST PLIK
-                            file_name = path_parts[-1]
-                            parent_path_str = "/".join(path_parts[:-1])
-                            
-                            # Znajdź folder rodzica
-                            parent_db_id = folder_map.get(parent_path_str)
-                            
-                            if parent_db_id is None:
-                                parent_db_id = parent_folder_id
-                            with zip_ref.open(member) as source_stream:
-                                ext = os.path.splitext(file_name)[1].lower()
-                                mime = mimetypes.types_map.get(ext, "application/octet-stream")
+                            new_folder_uuid = await self._get_or_create_folder(
+                                uow, user_id, part_name, current_parent_id
+                            )
+                            folder_map[current_path_key] = new_folder_uuid
+                            current_parent_id = new_folder_uuid
+                    if member.is_dir():
+                        continue
 
-                                await self._save_zip_member_as_file(
-                                    uow, user_id, source_stream, file_name, 
-                                    parent_db_id, mime, ext, ip, user_agent
-                                )
-                                created_files_count += 1
+                    file_name = path_parts[-1]
+                    
+                    with zip_ref.open(member) as source_stream:
+                        ext = os.path.splitext(file_name)[1].lower()
+                        mime = mimetypes.types_map.get(ext, "application/octet-stream")
 
-        except zipfile.BadZipFile as e:
-            raise zipfile.BadZipFile()
+                        await self._save_zip_member_as_file(
+                            uow, user_id, source_stream, file_name, 
+                            current_parent_id, mime, ext, ip, user_agent
+                        )
+                        created_files_count += 1
 
         return {"status": "success", "imported_files": created_files_count}
 
