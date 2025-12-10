@@ -5,7 +5,7 @@ from src.application.logbook_service import LogbookService
 from src.domain.entities.blob import Blob
 import hashlib
 from fastapi import UploadFile
-from src.application.errors import FileTooLargeError, FolderNameExistsError, FolderNotFoundError, InvalidParentFolder, FileNotFoundError, AccessDeniedError
+from src.application.errors import BadFileFormatError, FileTooLargeError, FolderNameExistsError, FolderNotFoundError, InvalidParentFolder, FileNotFoundError, AccessDeniedError
 from src.domain.enums.op_type import OpType
 from src.domain.entities.file import File
 from src.domain.entities.file_version import FileVersion
@@ -369,7 +369,7 @@ class FileService:
                 for child in await uow.files.list_in_folder(user_id, file.id):
                     await self.delete_file(uow, user_id, child.id, ip, user_agent, session_id)
             await uow.files.delete(file)
-            self.logbook.register_log(
+            await self.logbook.register_log(
                 uow=uow,
                 op_type=OpType.FILE_DELETE,
                 user_id=user_id,
@@ -505,7 +505,7 @@ class FileService:
             file_id: UUID,
             ip: str,
             user_agent: str,
-            version_id: Optional[UUID] = None, # Przesunąłem na koniec jako opcjonalny
+            version_id: Optional[UUID] = None, 
             session_id: Optional[UUID] = None
         ):
             async with uow:
@@ -514,7 +514,8 @@ class FileService:
                     raise FileNotFoundError(detail=f"File with id {file_id} not found.")
                 if file_record.owner_id != user_id:
                     raise AccessDeniedError(detail="Access denied.")
-                
+                if file_record.is_folder:
+                    raise FileNotFoundError(detail="Cannot download a folder.")
                 target_version = None
                 if version_id:
                     version = await uow.file_versions.get_by_id(version_id)
@@ -561,57 +562,64 @@ class FileService:
         MAX_ZIP_SIZE_MB = settings.max_file_upload_size_mb
         processed_paths = set()
         created_files_count = 0
+        try:
+            async with uow:
+                parent_folder = await uow.files.get_by_id(parent_folder_id) if parent_folder_id else None
+                if parent_folder==None and parent_folder_id is not None:
+                    raise FolderNotFoundError(f"Parent folder with id {parent_folder_id} not found.")
+                if parent_folder  and parent_folder.owner_id != user_id:
+                    raise AccessDeniedError("Access denied to this folder.")
+                zip_stem = Path(file.filename).stem  # Ucina .zip
+                root_zip_folder_id = await self._get_or_create_folder(
+                    uow, user_id, zip_stem, parent_folder_id
+                )
+                folder_map = {"": root_zip_folder_id}
 
-        async with uow:
-            zip_stem = Path(file.filename).stem  # Ucina .zip
-            root_zip_folder_id = await self._get_or_create_folder(
-                uow, user_id, zip_stem, parent_folder_id
-            )
-            folder_map = {"": root_zip_folder_id}
-
-            with zipfile.ZipFile(file.file, 'r') as zip_ref:
-                total_uncompressed_size = sum(zinfo.file_size for zinfo in zip_ref.infolist())
-                if total_uncompressed_size > MAX_ZIP_SIZE_MB * 1024 * 1024:
-                    raise FileTooLargeError(detail=f"Zip contents exceed limit of {MAX_ZIP_SIZE_MB} MB.")
-                
-                zip_contents = sorted(zip_ref.infolist(), key=lambda x: x.filename)
-
-                for member in zip_contents:
-                    filename = member.filename
-                    if filename in processed_paths: continue
-                    processed_paths.add(filename)
-                    if filename.startswith("/") or ".." in filename: continue
-                    if "__MACOSX" in filename or ".DS_Store" in filename: continue
-                    path_parts = filename.rstrip("/").split("/")
-                    # Startujemy od naszego nowego folderu-kontenera
-                    current_parent_id = root_zip_folder_id
-                    parts_to_process = path_parts if member.is_dir() else path_parts[:-1]
+                with zipfile.ZipFile(file.file, 'r') as zip_ref:
+                    total_uncompressed_size = sum(zinfo.file_size for zinfo in zip_ref.infolist())
+                    if total_uncompressed_size > MAX_ZIP_SIZE_MB * 1024 * 1024:
+                        raise FileTooLargeError(detail=f"Zip contents exceed limit of {MAX_ZIP_SIZE_MB} MB.")
                     
-                    for i, part_name in enumerate(parts_to_process):
-                        current_path_key = "/".join(path_parts[:i+1])
-                        found_id = folder_map.get(current_path_key)
-                        if found_id:
-                            current_parent_id = found_id
-                        else:
-                            new_folder_uuid = await self._get_or_create_folder(
-                                uow, user_id, part_name, current_parent_id
+                    zip_contents = sorted(zip_ref.infolist(), key=lambda x: x.filename)
+
+                    for member in zip_contents:
+                        filename = member.filename
+                        if filename in processed_paths: continue
+                        processed_paths.add(filename)
+                        if filename.startswith("/") or ".." in filename: continue
+                        if "__MACOSX" in filename or ".DS_Store" in filename: continue
+                        path_parts = filename.rstrip("/").split("/")
+                        # Startujemy od naszego nowego folderu-kontenera
+                        current_parent_id = root_zip_folder_id
+                        parts_to_process = path_parts if member.is_dir() else path_parts[:-1]
+                        
+                        for i, part_name in enumerate(parts_to_process):
+                            current_path_key = "/".join(path_parts[:i+1])
+                            found_id = folder_map.get(current_path_key)
+                            if found_id:
+                                current_parent_id = found_id
+                            else:
+                                new_folder_uuid = await self._get_or_create_folder(
+                                    uow, user_id, part_name, current_parent_id
+                                )
+                                folder_map[current_path_key] = new_folder_uuid
+                                current_parent_id = new_folder_uuid
+                        if member.is_dir():
+                            continue
+
+                        file_name = path_parts[-1]
+                        
+                        with zip_ref.open(member) as source_stream:
+                            ext = os.path.splitext(file_name)[1].lower()
+                            mime = mimetypes.types_map.get(ext, "application/octet-stream")
+
+                            await self._save_zip_member_as_file(
+                                uow, user_id, source_stream, file_name, 
+                                current_parent_id, mime, ext, ip, user_agent
                             )
-                            folder_map[current_path_key] = new_folder_uuid
-                            current_parent_id = new_folder_uuid
-                    if member.is_dir():
-                        continue
-
-                    file_name = path_parts[-1]
-                    
-                    with zip_ref.open(member) as source_stream:
-                        ext = os.path.splitext(file_name)[1].lower()
-                        mime = mimetypes.types_map.get(ext, "application/octet-stream")
-
-                        await self._save_zip_member_as_file(
-                            uow, user_id, source_stream, file_name, 
-                            current_parent_id, mime, ext, ip, user_agent
-                        )
-                        created_files_count += 1
+                            created_files_count += 1
+        except zipfile.BadZipFile:
+            raise BadFileFormatError(detail="Uploaded file is not a valid ZIP archive.")
 
         return {"status": "success", "imported_files": created_files_count}
 
@@ -700,7 +708,7 @@ class FileService:
             )
             await uow.files.add(new_file)   
             logging.debug(f"Created new file {filename} with ID {new_file.id} in parent {parent_id}")
-            logging.debug("size bytes: ", size_bytes)  
+            logging.debug(f"size bytes: {size_bytes}")  
             ver = FileVersion(
                 id =new_version_id,
                 file_id=new_file.id,

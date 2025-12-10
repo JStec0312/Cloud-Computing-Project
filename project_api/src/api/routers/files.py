@@ -14,7 +14,7 @@ from typing import Annotated, Optional
 from src.rate_limiting import limiter
 import uuid
 from src.api.schemas.users import UserFromToken
-from src.application.errors import FileTooLargeError, FolderNotFoundError, InvalidParentFolder, FileNameExistsError, FileNotFoundError, AccessDeniedError, FolderNameExistsError
+from src.application.errors import BadFileFormatError, FileTooLargeError, FolderNotFoundError, InvalidParentFolder, FileNameExistsError, FileNotFoundError, AccessDeniedError, FolderNameExistsError
 from src.api.schemas.files import DirectoryListingResponse, CreateFolderRequest
 from uuid import UUID
 from src.config.app_config import settings
@@ -90,6 +90,7 @@ async def get_user_files(
 
 
 @router.patch("/{file_id}/rename", response_model=FileResponse)
+@limiter.limit(RATE_LIMIT)
 async def rename_file(
     file_id: UUID,
     body: RenameFileRequest,
@@ -117,6 +118,7 @@ async def rename_file(
 
 
 @router.get("/{file_id}/download", status_code=200)
+@limiter.limit(RATE_LIMIT)
 async def download_file(
     file_id: UUID,
     request: Request,
@@ -160,6 +162,7 @@ async def download_file(
         raise HTTPException(status_code=e.status_code, detail=str(e))
 
 @router.delete("/{file_id}", status_code=204)
+@limiter.limit(RATE_LIMIT)
 async def delete_file(
     request: Request,
     file_id: UUID,
@@ -185,6 +188,7 @@ async def delete_file(
 
 
 @router.post("/folders", status_code=201)
+@limiter.limit(RATE_LIMIT)
 async def create_folder(
     body: CreateFolderRequest, 
     request: Request,
@@ -214,6 +218,7 @@ async def create_folder(
 
 
 @router.get("/{file_id}/versions", response_model=list[VersionResponse])
+@limiter.limit(RATE_LIMIT)
 async def get_file_versions(
     file_id: UUID,
     request: Request,
@@ -238,6 +243,7 @@ async def get_file_versions(
 
 
 @router.get("/{file_id}/versions/{version_id}/download")
+@limiter.limit(RATE_LIMIT)
 async def download_file_version(
     file_id: UUID,
     version_id: UUID,
@@ -251,7 +257,7 @@ async def download_file_version(
             uow=uow,
             user_id=current_user.id,
             file_id=file_id,
-            version_id=version_id, # <--- Przekazujemy ID wersji
+            version_id=version_id,
             ip=request.client.host if request.client else "unknown",
             user_agent=request.headers.get("user-agent", "unknown")
         )
@@ -282,6 +288,7 @@ async def download_file_version(
     
 
 @router.post("/zip", status_code=200)
+@limiter.limit(RATE_LIMIT)
 async def upload_zip_file(
     request: Request,
     parent_id: Optional[UUID] = Form(None, description="ID folderu nadrzędnego. Jeśli brak - plik zostanie przesłany do Root."),
@@ -313,3 +320,8 @@ async def upload_zip_file(
         raise HTTPException(status_code=e.status_code, detail=str(e))
     except FileNameExistsError as e:
         raise HTTPException(status_code=e.status_code, detail=str(e))
+    except BadFileFormatError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+    except AccessDeniedError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+

@@ -8,7 +8,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from src.infrastructure.db.base import Base
 
 if TYPE_CHECKING:
-    from src.domain.entities.package import Package
     from src.domain.entities.file_version import FileVersion
 
 class Blob(Base):
@@ -22,6 +21,5 @@ class Blob(Base):
 
     file_versions: Mapped[List["FileVersion"]] = relationship(back_populates="blob", cascade="all, delete-orphan")
 
-    packages: Mapped[List["Package"]] = relationship(back_populates="archive_blob")
     def __repr__(self) -> str:
         return f"Blob(id={self.id}, sha256={self.sha256}, size_bytes={self.size_bytes})"

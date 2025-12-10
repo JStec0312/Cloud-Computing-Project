@@ -10,7 +10,6 @@ if TYPE_CHECKING:
     from src.domain.entities.session import Session
     from src.domain.entities.file import File
     from src.domain.entities.file_version import FileVersion
-    from src.domain.entities.package import Package
 
 class User(Base):
     __tablename__ = "users"
@@ -26,7 +25,6 @@ class User(Base):
     sessions: Mapped[List["Session"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     owned_files: Mapped[List["File"]] = relationship(back_populates="owner")
     uploaded_versions: Mapped[List["FileVersion"]] = relationship(back_populates="uploader", cascade="all, delete-orphan")
-    packages_created: Mapped[List["Package"]] = relationship(back_populates="creator")
 
     def __repr__(self) -> str:
         return f"User(id={self.id}, email={self.email})"

@@ -8,8 +8,6 @@ from src.infrastructure.db.base import Base
  
 from src.domain.entities.blob import Blob
 from src.domain.entities.user import User
-from src.domain.entities.package import Package
-from src.domain.entities.package_item import PackageItem
 from src.domain.entities.refresh_token import RefreshToken
 from src.domain.entities.session import Session
 

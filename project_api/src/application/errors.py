@@ -4,6 +4,8 @@ class UserError(Exception):
     def __init__(self, status_code: int, detail: str):
         self.status_code = status_code
         self.detail = detail
+    def __str__(self):
+        return self.detail
 
 class UserAlreadyExistsError(UserError):
     def __init__(self, email: str):
@@ -21,57 +23,82 @@ class RefreshTokenError(Exception):
     def __init__(self, status_code: int, detail: str):
         self.status_code = status_code
         self.detail = detail
+    def __str__(self):
+        return self.detail
         
 class RefreshTokenMissingError(RefreshTokenError):
     def __init__(self, detail: str = "Refresh token is missing"):
         super().__init__(status_code=401, detail=detail)
+    def __str__(self):
+        return self.detail
         
 class MissingAccessTokenError(Exception):
     def __init__(self, detail: str = "Access token is missing"):
         self.status_code = 401
         self.detail = detail
+    def __str__(self):
+        return self.detail
         
 class TokenExpiredError(Exception):
     def __init__(self, detail: str = "Token has expired"):
         self.status_code = 401
         self.detail = detail
+    def __str__(self):
+        return self.detail
         
 class InvalidTokenError(Exception):
     def __init__(self, detail: str = "Invalid token"):
         self.status_code = 401
         self.detail = detail
+    def __str__(self):
+        return self.detail
 
 class InvalidParentFolder(Exception):
     def __init__(self, folder_id: str, detail: str = "Invalid parent folder"):
         self.status_code = 404
         self.detail = f"Parent folder with id {folder_id} not found."
+    def __str__(self):
+        return self.detail
 
 class FileTooLargeError(Exception):
     def __init__(self, max_size_mb: int = settings.max_file_upload_size_mb):
         self.status_code = 413
         self.detail = f"File size exceeds the maximum allowed size of {max_size_mb} MB."
-
+    def __str__(self):
+        return self.detail
 class FolderNotFoundError(Exception):
     def __init__(self, folder_id: str):
         self.status_code = 404
         self.detail = f"Folder with id {folder_id} not found."
-
+    def __str__(self):
+        return self.detail
 class FileNameExistsError(Exception):
     def __init__(self,  detail: str = "File name already exists in the target folder"):
         self.status_code = 409
         self.detail = detail 
-        
+    def __str__(self):
+        return self.detail       
 class FileNotFoundError(Exception):
     def __init__(self, detail: str = "File not found"):
         self.status_code = 404
         self.detail = detail
-
+    def __str__(self):
+        return self.detail
 class AccessDeniedError(Exception):
     def __init__(self, detail: str = "Access denied"):
         self.status_code = 403
         self.detail = detail
-
+    def __str__(self):
+        return self.detail
 class FolderNameExistsError(Exception):
     def __init__(self, detail: str = "Folder name already exists in the target folder"):
         self.status_code = 409
         self.detail = detail
+    def __str__(self):
+        return self.detail
+class BadFileFormatError(Exception):
+    def __init__(self, detail: str = "Bad file format"):
+        self.status_code = 400
+        self.detail = detail
+    def __str__(self):
+        return self.detail
