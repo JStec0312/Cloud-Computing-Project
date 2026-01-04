@@ -13,7 +13,7 @@ sys.path.insert(0, str(project_root))
 from src.main import app
 from src.infrastructure.uow import SqlAlchemyUoW
 
-
+@pytest.mark.asyncio
 class TestAuthIntegration:
     """Integration tests for complete auth flows."""
     

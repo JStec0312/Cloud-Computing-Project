@@ -19,7 +19,7 @@ from src.infrastructure.uow import SqlAlchemyUoW
 from tests.seeds import TestDataSeed
 from unittest.mock import patch
 
-
+@pytest.mark.asyncio
 class TestFileUpload:
     """Tests for file upload endpoint."""
     

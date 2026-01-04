@@ -19,7 +19,7 @@ from src.infrastructure.uow import SqlAlchemyUoW
 from tests.seeds import TestDataSeed
 from tests.factories import FileVersionFactory
 
-
+@pytest.mark.asyncio
 class TestFileVersions:
     """Tests for file versions endpoint."""
     

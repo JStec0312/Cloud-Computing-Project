@@ -18,7 +18,7 @@ from src.main import app
 from src.infrastructure.uow import SqlAlchemyUoW
 from tests.seeds import TestDataSeed
 
-
+@pytest.mark.asyncio
 class TestFolderCreate:
     """Tests for folder creation endpoint."""
     
