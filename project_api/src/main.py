@@ -1,4 +1,3 @@
-import fastapi
 from src.api.routers.auth import limiter, router as auth_controller
 from src.api.routers.files import router as files_controller
 from src.config.logging import configure_logging

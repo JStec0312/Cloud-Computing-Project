@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     db_host: str 
     db_port: int 
     app_port: int
+    db_url:str
+    db_url_sync: str 
     # JWT Settings
     jwt_secret: str
     jwt_algorithm: str
@@ -32,6 +34,10 @@ class Settings(BaseSettings):
     STANDARD_RATE_LIMIT: str = "2000/minute" # Adjusted for local testing change in dev
 
     def dsn_async(self) -> str:
-        return f"postgresql+asyncpg://{self.db_user}:{self.db_pass}@{self.db_host}:{self.db_port}/{self.db_name}"
-
+        return f"postgresql+asyncpg://{self.db_user}:{self.db_pass}@{self.db_host}:{self.db_port}/{self.db_name}" if not self.db_url else self.db_url
+    
+    def dsn_sync(self) -> str:
+        return self.db_url_sync or (
+            f"postgresql://{self.db_user}:{self.db_pass}@{self.db_host}:{self.db_port}/{self.db_name}"
+        )
 settings = Settings()

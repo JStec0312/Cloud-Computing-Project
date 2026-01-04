@@ -48,3 +48,5 @@ watchfiles==1.1.1
 websockets==15.0.1
 wrapt==1.17.3
 zope.interface==8.1.1
+asyncpg
+psycopg2-binary
