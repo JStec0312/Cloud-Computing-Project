@@ -228,19 +228,21 @@ class AuthService:
 		payload = decode_access_token(access_token)
 		user_id: str = payload.get("sub")
 		user = await uow.users.get_by_id(user_id)
+
 		if not user:
 			await self._logsvc.register_log(
 				uow,
-				op_type=OpType.AUTO_AUTH,
+				op_type=OpType.LOGIN,
 				user_id=None,
 				remote_addr="",
 				user_agent="",
 				details={"success": False, "error": "User not found"},
 			)
 			raise UserNotFoundError(f"User with id {user_id} not found")
+
 		await self._logsvc.register_log(
 			uow,
-			op_type=OpType.AUTO_AUTH,
+			op_type=OpType.LOGIN,
 			user_id=user.id,
 			remote_addr="",
 			user_agent="",
