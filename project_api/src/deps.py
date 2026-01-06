@@ -10,6 +10,8 @@ from src.application.auth_service import AuthService
 from src.application.logbook_service import LogbookService
 from src.application.file_service import FileService
 from src.config.app_config import settings
+from src.infrastructure.storage.S3BlobStorage import S3BlobStorage
+
 
 
 async def get_uow():
@@ -44,7 +46,11 @@ def get_auth_service(
     return AuthService(hasher, logsvc, refresh_token_svc, session_svc, token_hasher)
 
 def get_storage():
-    from src.infrastructure.storage.LocalBlobStorage import LocalBlobStorage
+    if settings.storage_type == "s3":
+        return S3BlobStorage(
+            bucket=settings.s3_bucket,
+            region=settings.s3_region
+        )
     return LocalBlobStorage(settings.local_storage_path)
 
 

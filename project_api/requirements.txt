@@ -46,3 +46,4 @@ websockets==15.0.1
 asyncpg
 pytest-asyncio
 psycopg2-binary
+aioboto3
