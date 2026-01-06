@@ -1,25 +1,26 @@
 import { useState } from 'react'
 import Login from './components/Login'
 import FilesList from './components/FilesList'
-import FileUpload from './components/FileUpload' // <--- Make sure this is imported
+import FileUpload from './components/FileUpload'
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(
     !!localStorage.getItem('token')
   );
   
-  // This number changes every time an upload finishes
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // --- NEW: LIFTED STATE ---
+  // We keep track of the current folder here so BOTH components know about it
+  const [currentFolderId, setCurrentFolderId] = useState(null); 
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     setIsAuthenticated(false);
   };
 
-  // We pass this function to the FileUpload component
   const handleUploadSuccess = () => {
-    console.log("Upload finished! Refreshing list...");
-    setRefreshKey(prev => prev + 1); // This change forces FilesList to re-render
+    setRefreshKey(prev => prev + 1);
   };
 
   return (
@@ -29,7 +30,6 @@ function App() {
         <Login onLoginSuccess={() => setIsAuthenticated(true)} />
       ) : (
         <div>
-          {/* Header */}
           <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', borderBottom: '1px solid #ddd', paddingBottom: '10px' }}>
             <h1 style={{ margin: 0 }}>📂 My Cloud Drive</h1>
             <button onClick={handleLogout} style={{ padding: '8px 16px', cursor: 'pointer', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '4px' }}>
@@ -37,13 +37,19 @@ function App() {
             </button>
           </header>
 
-          {/* 1. File Upload Section */}
-          <FileUpload onUploadSuccess={handleUploadSuccess} />
+          {/* 1. Pass currentFolderId so uploads go to the right place */}
+          <FileUpload 
+            onUploadSuccess={handleUploadSuccess} 
+            currentFolderId={currentFolderId} 
+          />
 
-          {/* 2. File List Section */}
-          {/* The 'key' prop is the magic trick. When it changes, React deletes and recreates this component. */}
+          {/* 2. Pass currentFolderId and the function to change it (onNavigate) */}
           <div style={{ border: '1px solid #ccc', padding: '20px', borderRadius: '8px', marginTop: '20px' }}>
-            <FilesList key={refreshKey} /> 
+            <FilesList 
+              key={refreshKey} 
+              currentFolderId={currentFolderId}
+              onNavigate={setCurrentFolderId}
+            /> 
           </div>
         </div>
       )}
