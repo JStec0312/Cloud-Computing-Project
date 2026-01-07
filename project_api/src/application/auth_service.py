@@ -78,7 +78,6 @@ class AuthService:
 				await self._logsvc.register_log(
 					uow,
 					op_type=OpType.USER_REGISTER,
-					user_id=user.id,
 					remote_addr=ip,
 					user_agent=user_agent,
 					details={

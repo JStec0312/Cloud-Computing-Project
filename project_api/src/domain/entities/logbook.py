@@ -25,7 +25,6 @@ class LogBook(Base):
     remote_addr: Mapped[Optional[str]] = mapped_column(INET)
     user_agent: Mapped[Optional[str]] = mapped_column()
     details: Mapped[Optional[dict]] = mapped_column(JSONB)
-    file_id: Mapped[Optional[uuid.UUID]] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("files.id", ondelete="SET NULL"), nullable=True)
 
 
     user: Mapped[Optional["User"]] = relationship()
