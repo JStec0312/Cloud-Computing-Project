@@ -11,7 +11,7 @@ from src.application.logbook_service import LogbookService
 from src.application.file_service import FileService
 from src.config.app_config import settings
 from src.infrastructure.storage.S3BlobStorage import S3BlobStorage
-
+from src.infrastructure.storage.LocalBlobStorage import LocalBlobStorage
 
 
 async def get_uow():
@@ -51,6 +51,7 @@ def get_storage():
             bucket=settings.s3_bucket,
             region=settings.s3_region
         )
+    return LocalBlobStorage()
 
 def get_filesvc(logsvc: LogbookService = Depends(get_logsvc), storage = Depends(get_storage)):
     return FileService(logsvc, storage)
