@@ -51,8 +51,6 @@ def get_storage():
             bucket=settings.s3_bucket,
             region=settings.s3_region
         )
-    return LocalBlobStorage(settings.local_storage_path)
-
 
 def get_filesvc(logsvc: LogbookService = Depends(get_logsvc), storage = Depends(get_storage)):
     return FileService(logsvc, storage)
