@@ -3,6 +3,7 @@ import enum
 class OpType(enum.Enum):
     LOGIN = "login"
     LOGOUT = "logout"
+    AUTO_AUTH = "auto_auth"  # <--- ADD THIS LINE
     UPLOAD = "upload"
     DOWNLOAD = "download"
     LIST_FILES = "list_files"

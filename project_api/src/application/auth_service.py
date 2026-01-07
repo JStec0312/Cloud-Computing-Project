@@ -227,21 +227,23 @@ class AuthService:
 		payload = decode_access_token(access_token)
 		user_id: str = payload.get("sub")
 		user = await uow.users.get_by_id(user_id)
+
 		if not user:
 			await self._logsvc.register_log(
 				uow,
-				op_type=OpType.AUTO_AUTH,
+				op_type=OpType.LOGIN,
 				user_id=None,
-				remote_addr="",
+				remote_addr="127.0.0.1",
 				user_agent="",
 				details={"success": False, "error": "User not found"},
 			)
 			raise UserNotFoundError(f"User with id {user_id} not found")
+
 		await self._logsvc.register_log(
 			uow,
-			op_type=OpType.AUTO_AUTH,
+			op_type=OpType.LOGIN,
 			user_id=user.id,
-			remote_addr="",
+			remote_addr="127.0.0.1",
 			user_agent="",
 			details={"success": True},
 		)
@@ -261,9 +263,9 @@ class AuthService:
 				user = await self.get_user_from_access_token(uow, access_token=access_token)
 				await self._logsvc.register_log(
 					uow,
-					op_type=OpType.AUTO_AUTH,
+					op_type=OpType.LOGIN,
 					user_id=user.id,
-					remote_addr="",
+					remote_addr="127.0.0.1",
 					user_agent="",
 					details={"success": True},
 				)
@@ -274,9 +276,9 @@ class AuthService:
 			logger.warning("invalid access token: %s", e)
 			await self._logsvc.register_log(
 				uow,
-				op_type=OpType.AUTO_AUTH,
+				op_type=OpType.LOGIN,
 				user_id=None,
-				remote_addr="",
+				remote_addr="127.0.0.1",
 				user_agent="",
 				details={"success": False, "error": "Invalid access token"},
 			)
@@ -284,9 +286,9 @@ class AuthService:
 		if not refresh_token:
 			await self._logsvc.register_log(
 				uow,
-				op_type=OpType.AUTO_AUTH,
+				op_type=OpType.LOGIN,
 				user_id=None,
-				remote_addr="",
+				remote_addr="127.0.0.1",
 				user_agent="",
 				details={"success": False, "error": "Missing refresh token"},
 			)
@@ -301,9 +303,9 @@ class AuthService:
 			)
 			await self._logsvc.register_log(
 				uow,
-				op_type=OpType.AUTO_AUTH,
+				op_type=OpType.LOGIN,
 				user_id=user.id,
-				remote_addr="",
+				remote_addr="127.0.0.1",
 				user_agent="",
 				details={"success": True},
 			)
