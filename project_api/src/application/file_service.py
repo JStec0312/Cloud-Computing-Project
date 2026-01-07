@@ -348,40 +348,43 @@ class FileService:
         
     async def delete_file(self, uow: SqlAlchemyUoW, user_id: UUID, file_id: UUID, ip: str, user_agent: str, session_id: Optional[UUID] = None):
         async with uow:
-            self.logbook.register_log(
-                uow=uow,
-                op_type=OpType.FILE_DELETE,
-                user_id=user_id,
-                remote_addr=ip,
-                user_agent=user_agent,
-                session_id=session_id,
-                details={
-                    "file_id": str(file_id),
-                    "status": "initiated"
-                }
-            )
-            file: File = await uow.files.get_by_id(file_id)
-            if not file:
-                raise FileNotFoundError(detail=f"File with id {file_id} not found.")
-            if file.owner_id != user_id:
-                raise AccessDeniedError(detail="Access denied to delete this file.")
-            if file.is_folder:
-                for child in await uow.files.list_in_folder(user_id, file.id):
-                    await self.delete_file(uow, user_id, child.id, ip, user_agent, session_id)
-            await uow.files.delete(file)
-            await self.logbook.register_log(
-                uow=uow,
-                op_type=OpType.FILE_DELETE,
-                user_id=user_id,
-                remote_addr=ip,
-                user_agent=user_agent,
-                session_id=session_id,
-                details={
-                    "file_id": str(file_id),
-                    "status": "completed"
-                }
-            )
-            return
+            await self._delete_file_recursive(uow, user_id, file_id, ip, user_agent, session_id)
+
+    async def _delete_file_recursive(self, uow: SqlAlchemyUoW, user_id: UUID, file_id: UUID, ip: str, user_agent: str, session_id: Optional[UUID]):
+        await self.logbook.register_log(
+            uow=uow,
+            op_type=OpType.FILE_DELETE,
+            user_id=user_id,
+            remote_addr=ip,
+            user_agent=user_agent,
+            session_id=session_id,
+            details={"file_id": str(file_id), "status": "initiated"},
+        )
+
+        file: File | None = await uow.files.get_by_id(file_id)
+        if not file:
+            raise FileNotFoundError(detail=f"File with id {file_id} not found.")
+        if file.owner_id != user_id:
+            raise AccessDeniedError(detail="Access denied to delete this file.")
+
+        if file.is_folder:
+            children = await uow.files.list_in_folder(user_id, file.id)
+            for child in children:
+                await self._delete_file_recursive(uow, user_id, child.id, ip, user_agent, session_id)
+
+        await uow.files.delete(file)
+
+        await self.logbook.register_log(
+            uow=uow,
+            op_type=OpType.FILE_DELETE,
+            user_id=user_id,
+            remote_addr=ip,
+            user_agent=user_agent,
+            session_id=session_id,
+            details={"file_id": str(file_id), "status": "completed"},
+        )
+
+
         
     async def get_file_versions(self, uow: SqlAlchemyUoW, file_id: UUID, user_id: UUID, ip: str, user_agent: str, session_id: Optional[UUID] = None) -> list[VersionResponse]:
         async with uow:

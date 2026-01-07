@@ -1,0 +1,85 @@
+# --- Python cache ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Builds / packaging ---
+.build/
+build/
+dist/
+downloads/
+wheels/
+*.egg-info/
+*.egg
+.eggs/
+MANIFEST
+.share/
+share/python-wheels/
+
+# --- Virtual envs ---
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.python-version
+__pypackages__/  # PDM
+
+# --- Logs & runtime ---
+*.log
+logs/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# --- Tests & coverage ---
+.pytest_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# --- Type checkers / linters ---
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+
+# --- Cython ---
+cython_debug/
+
+# --- Jupyter / IPython ---
+.ipynb_checkpoints/
+.profile_default/
+ipython_config.py
+
+# --- Databases (local dev) ---
+*.sqlite3
+*.db
+
+# --- Env / secrets (dopasuj do swoich potrzeb) ---
+.env
+.env.*
+*.pem
+*.key
+
+# --- Editors / IDEs ---
+.vscode/
+.idea/
+
+# --- OS junk ---
+.DS_Store
+Thumbs.db
+
+# --- Docker (opcjonalnie, jeśli używasz override) ---
+docker-compose.override.yml
+
+project/

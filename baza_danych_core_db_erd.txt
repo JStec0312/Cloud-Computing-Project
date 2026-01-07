@@ -1,0 +1,109 @@
+https://dbdiagram.io/d/6838368ec07db17e77b6b1dd
+
+TABLE users{
+  id uuid [pk, default: 'get_random_uuid()']
+  email varchar(255) unique [not null]
+  hashed_password varchar(255) [not null]
+  created_at timestamp [default: `now()`] 
+}
+
+TABLE sessions{
+  id uuid [pk, default:'get_random_uuid()']
+  user_id uuid [ ref: > users.id ]  
+  started_at timestamp [default: 'now()']
+  ended_at timestamp
+  user_agent varchar(512)
+  ip_inet inet
+}
+
+TABLE files {
+  id uuid [pk, default:'get_random_uuid()']
+  owner_id uuid 
+  name varchar(512) [not null]
+  mime_type varchar(255)
+  current_version_id uuid
+  created_at timestamp [not null, default: 'now()']
+}
+
+TABLE blobs{
+  id uuid [pk, default: 'get_random_uuid()']
+  sha256 char(64) [not null, unique]
+  size_byutes bigint [not null]
+  storage_path text [not null]
+  created_at timestampz [not null, default: 'now()']
+}
+
+TABLE file_versions{
+  id uuid [pk, default: 'now()']
+  file_id uuid [not null] 
+  version_no int [not null]
+  uploaded_by uuid
+  uploaded_at timestampz [not null, default: 'now()']
+}
+
+Table packages {
+  id uuid [pk, default: `gen_random_uuid()`]
+  created_by uuid 
+  name varchar(255)
+  archive_blob_id uuid 
+  created_at timestamptz [not null, default: `now()`]
+  expires_at timestamptz
+}
+
+
+Table package_items {
+  id uuid [pk, default: `gen_random_uuid()`]
+  package_id uuid 
+  file_id uuid 
+  version_id uuid 
+  path_in_archive text
+
+  Note: 'UNIQUE (package_id, file_id, version_id)'
+}
+Ref: package_items.package_id > packages.id [delete: cascade]
+Ref: package_items.version_id > file_versions.id [delete: cascade]
+
+
+Table logbook {
+  id              bigserial   [pk]
+  occurred_at     timestamptz [not null, default: `now()`]
+  user_id         uuid       
+  session_id      uuid        
+  op_type         op_type     [not null]
+  file_id         uuid       
+  file_version_id uuid       
+  package_id      uuid       
+  remote_addr     inet
+  user_agent      varchar(512)
+  details         jsonb
+
+  Note: 'Audit log zdarzeń użytkownika.'
+}
+
+Ref: logbook.user_id > users.id           [delete: Set Null]
+Ref: logbook.session_id > sessions.id     [delete: Set Null]
+Ref: logbook.file_id > files.id           [delete: Set Null]
+Ref: logbook.file_version_id > file_versions.id [delete: Set Null]
+Ref: logbook.package_id > packages.id     [delete: Set Null]
+
+Table refresh_tokens{
+  id uuid [pk]
+  user_id uuid [not null]
+  session_id uuid 
+  revoked_id uuid
+  token_hash char(64) [not null, unique]
+  issued_at timestamp [not null, default: 'now()']
+  expires_at timestamp [not null] //now + 30 days
+  revoked_at timestamp
+  }
+Ref: refresh_tokens.user_id > users.id [delete: cascade]
+Ref: refresh_tokens.session_id > sessions.id [delete: cascade]
+Ref: refresh_tokens.revoked_id > refresh_tokens.id [delete: cascade]
+
+Ref: packages.created_by > users.id [delete: set null]
+Ref: packages.archive_blob_id > blobs.id [delete: set null]
+
+
+Ref: files.owner_id > users.id [delete: set null]
+Ref: file_versions.file_id > files.id [delete: cascade]
+Ref: file_versions.uploaded_by > users.id [delete: cascade]
