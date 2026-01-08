@@ -9,7 +9,11 @@ configure_logging("DEBUG")
 
 STANDARD_PREFIX = "/api/v1"
 
-app = FastAPI(title="Cloud drive")
+app = FastAPI(
+    title="Cloud Drive API",
+    description="A robust REST API for cloud storage service with file versioning, rate limiting, and S3 support.",
+    version="1.0.0"
+)
 
 # --- ADD THIS SECTION ---
 # This allows your React app to talk to the backend
