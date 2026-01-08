@@ -18,6 +18,13 @@ class Settings(BaseSettings):
     jwt_expiration_minutes: int 
     jwt_refresh_expiration_days: int
     token_pepper: str
+    #AWS
+    storage_type:str
+    s3_bucket: str
+    s3_region: str | None = None
+    aws_access_key_id: str
+    aws_secret_access_key: str
+
     #cookies
     refresh_cookie_name: str = "refresh_token"
     httponly_cookie: bool = True
@@ -35,17 +42,6 @@ class Settings(BaseSettings):
     # Rate limiting
     STANDARD_RATE_LIMIT: str = "2000/minute" # Adjusted for local testing change in dev
 
-    storage_type: str = "local"
-    s3_bucket: str | None = None
-    s3_region: str | None = None
-
-    # AWS / S3
-    aws_access_key_id: Optional[str] = Field(default=None, alias="AWS_ACCESS_KEY_ID")
-    aws_secret_access_key: Optional[str] = Field(default=None, alias="AWS_SECRET_ACCESS_KEY")
-
-    storage_type: str = "local"
-    s3_bucket: Optional[str] = None
-    s3_region: Optional[str] = None
 
     def dsn_async(self) -> str:
         return f"postgresql+asyncpg://{self.db_user}:{self.db_pass}@{self.db_host}:{self.db_port}/{self.db_name}" if not self.db_url else self.db_url

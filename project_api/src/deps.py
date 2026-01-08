@@ -49,7 +49,9 @@ def get_storage():
     if settings.storage_type == "s3":
         return S3BlobStorage(
             bucket=settings.s3_bucket,
-            region=settings.s3_region
+            region=settings.s3_region,
+            aws_access_key_id=settings.aws_access_key_id,
+            aws_secret_access_key=settings.aws_secret_access_key,
         )
     return LocalBlobStorage()
 
