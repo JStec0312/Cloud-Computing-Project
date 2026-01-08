@@ -9,14 +9,35 @@ function App() {
   );
   
   const [refreshKey, setRefreshKey] = useState(0);
-
-  // --- NEW: LIFTED STATE ---
-  // We keep track of the current folder here so BOTH components know about it
   const [currentFolderId, setCurrentFolderId] = useState(null); 
 
+  // Standard local logout
   const handleLogout = () => {
     localStorage.removeItem('token');
     setIsAuthenticated(false);
+    setCurrentFolderId(null);
+  };
+
+  // --- NEW: LOGOUT ALL DEVICES ---
+  const handleLogoutAll = async () => {
+    if(!confirm("Are you sure you want to log out of ALL devices?")) return;
+
+    try {
+        const token = localStorage.getItem('token');
+        // Assuming endpoint is .../auth/logout/all based on your structure
+        await fetch('http://localhost:8000/api/v1/auth/logout/all', {
+            method: 'POST', // Usually POST for actions
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+    } catch (error) {
+        console.error("Logout all error:", error);
+        // We log out locally even if server fails (e.g. server down)
+    } finally {
+        handleLogout();
+        alert("Logged out from all devices.");
+    }
   };
 
   const handleUploadSuccess = () => {
@@ -32,18 +53,31 @@ function App() {
         <div>
           <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', borderBottom: '1px solid #ddd', paddingBottom: '10px' }}>
             <h1 style={{ margin: 0 }}>📂 My Cloud Drive</h1>
-            <button onClick={handleLogout} style={{ padding: '8px 16px', cursor: 'pointer', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '4px' }}>
-              Logout
-            </button>
+            
+            <div style={{ display: 'flex', gap: '10px' }}>
+                {/* NEW BUTTON */}
+                <button 
+                    onClick={handleLogoutAll} 
+                    title="Invalidate all sessions"
+                    style={{ padding: '8px 12px', cursor: 'pointer', backgroundColor: '#555', color: 'white', border: 'none', borderRadius: '4px' }}
+                >
+                    Logout All
+                </button>
+
+                <button 
+                    onClick={handleLogout} 
+                    style={{ padding: '8px 16px', cursor: 'pointer', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '4px' }}
+                >
+                    Logout
+                </button>
+            </div>
           </header>
 
-          {/* 1. Pass currentFolderId so uploads go to the right place */}
           <FileUpload 
             onUploadSuccess={handleUploadSuccess} 
             currentFolderId={currentFolderId} 
           />
 
-          {/* 2. Pass currentFolderId and the function to change it (onNavigate) */}
           <div style={{ border: '1px solid #ccc', padding: '20px', borderRadius: '8px', marginTop: '20px' }}>
             <FilesList 
               key={refreshKey} 
