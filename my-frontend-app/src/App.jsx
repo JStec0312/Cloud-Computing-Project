@@ -45,48 +45,68 @@ function App() {
   };
 
   return (
-    <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif', maxWidth: '800px', margin: '0 auto', color: '#333' }}>
+    // OUTER CONTAINER: Full screen size, centers everything inside
+    <div style={{ 
+      minHeight: '100vh', 
+      width: '100vw',              // 👈 This forces full width so horizontal centering works
+      display: 'flex', 
+      justifyContent: 'center',    // Centers Horizontally
+      alignItems: 'center',        // Centers Vertically
+      backgroundColor: '#1a1a1a',  // Dark background to match your theme
+      color: '#333',
+      margin: 0,
+      padding: 0,
+      boxSizing: 'border-box'
+    }}>
       
-      {!isAuthenticated ? (
-        <Login onLoginSuccess={() => setIsAuthenticated(true)} />
-      ) : (
-        <div>
-          <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', borderBottom: '1px solid #ddd', paddingBottom: '10px' }}>
-            <h1 style={{ margin: 0 }}>📂 My Cloud Drive</h1>
-            
-            <div style={{ display: 'flex', gap: '10px' }}>
-                {/* NEW BUTTON */}
-                <button 
-                    onClick={handleLogoutAll} 
-                    title="Invalidate all sessions"
-                    style={{ padding: '8px 12px', cursor: 'pointer', backgroundColor: '#555', color: 'white', border: 'none', borderRadius: '4px' }}
-                >
-                    Logout All
-                </button>
+      {/* INNER WINDOW: Your actual app content */}
+      <div style={{ 
+        width: '100%', 
+        maxWidth: '800px',         // Keeps it looking like a "window"
+        padding: '20px',
+        borderRadius: '8px'
+      }}>
+        
+        {!isAuthenticated ? (
+          <Login onLoginSuccess={() => setIsAuthenticated(true)} />
+        ) : (
+          <div>
+            <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', borderBottom: '1px solid #444', paddingBottom: '10px' }}>
+              <h1 style={{ margin: 0, color: '#f0f0f0' }}>My Cloud Drive</h1>
+              
+              <div style={{ display: 'flex', gap: '10px' }}>
+                  <button 
+                      onClick={handleLogoutAll} 
+                      title="Invalidate all sessions"
+                      style={{ padding: '8px 12px', cursor: 'pointer', backgroundColor: '#555', color: 'white', border: 'none', borderRadius: '4px' }}
+                  >
+                      Logout All
+                  </button>
 
-                <button 
-                    onClick={handleLogout} 
-                    style={{ padding: '8px 16px', cursor: 'pointer', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '4px' }}
-                >
-                    Logout
-                </button>
+                  <button 
+                      onClick={handleLogout} 
+                      style={{ padding: '8px 16px', cursor: 'pointer', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '4px' }}
+                  >
+                      Logout
+                  </button>
+              </div>
+            </header>
+
+            <FileUpload 
+              onUploadSuccess={handleUploadSuccess} 
+              currentFolderId={currentFolderId} 
+            />
+
+            <div style={{ border: '1px solid #444', padding: '20px', borderRadius: '8px', marginTop: '20px', backgroundColor: '#222' }}>
+              <FilesList 
+                key={refreshKey} 
+                currentFolderId={currentFolderId}
+                onNavigate={setCurrentFolderId}
+              /> 
             </div>
-          </header>
-
-          <FileUpload 
-            onUploadSuccess={handleUploadSuccess} 
-            currentFolderId={currentFolderId} 
-          />
-
-          <div style={{ border: '1px solid #ccc', padding: '20px', borderRadius: '8px', marginTop: '20px' }}>
-            <FilesList 
-              key={refreshKey} 
-              currentFolderId={currentFolderId}
-              onNavigate={setCurrentFolderId}
-            /> 
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
