@@ -59,7 +59,7 @@ function FileUpload({ onUploadSuccess, currentFolderId }) {
 
     } catch (error) {
       console.error('Upload Error:', error);
-      setMessage(`❌ Error: ${error.message}`);
+      setMessage(`Error: ${error.message}`);
     } finally {
       setUploading(false);
     }
@@ -90,7 +90,7 @@ function FileUpload({ onUploadSuccess, currentFolderId }) {
         throw new Error(errorText || "Failed to create folder");
       }
 
-      setMessage(`✅ Folder "${folderName}" created!`);
+      setMessage(`Folder "${folderName}" created!`);
       if (onUploadSuccess) onUploadSuccess();
 
     } catch (error) {
@@ -106,7 +106,7 @@ function FileUpload({ onUploadSuccess, currentFolderId }) {
           onClick={handleCreateFolder}
           style={{ padding: '8px 12px', cursor: 'pointer', backgroundColor: '#FF9800', color: 'white', border: 'none', borderRadius: '4px' }}
         >
-          📁 New Folder
+          New Folder
         </button>
 
         <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', color: '#ccc' }}>
@@ -120,7 +120,7 @@ function FileUpload({ onUploadSuccess, currentFolderId }) {
       </div>
 
       <h4 style={{ marginTop: 0 }}>
-        {isZipMode ? '📦 Upload Zip Archive' : '📄 Upload Single File'} 
+        {isZipMode ? 'Upload Zip Archive' : 'Upload Single File'} 
         {currentFolderId && <span style={{fontSize: '0.8em', color: '#aaa', marginLeft: '10px'}}>(inside active folder)</span>}
       </h4>
       
@@ -145,7 +145,7 @@ function FileUpload({ onUploadSuccess, currentFolderId }) {
             fontWeight: 'bold'
           }}
         >
-          {uploading ? 'Uploading...' : (isZipMode ? 'Upload Zip 📦' : 'Upload ⬆️')}
+          {uploading ? 'Uploading...' : (isZipMode ? 'Upload Zip' : 'Upload ')}
         </button>
       </form>
 

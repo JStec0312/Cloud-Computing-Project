@@ -211,7 +211,7 @@ function FilesList({ currentFolderId, onNavigate }) {
   return (
     <div style={{ marginTop: '20px', color: 'white' }}> 
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-        <h3>{currentFolderId ? `📂 ${currentFolderName}` : '🏠 Root'}</h3>
+        <h3>{currentFolderId ? `${currentFolderName}` : 'Root'}</h3>
         {currentFolderId && (
           <button 
             onClick={handleGoUp}
@@ -272,22 +272,22 @@ function FilesList({ currentFolderId, onNavigate }) {
                         title="View Versions"
                         style={{ cursor: 'pointer', background: isExpanded ? '#FF9800' : 'none', border: '1px solid #555', color: isExpanded ? 'white' : '#ddd', borderRadius: '4px', padding: '5px 10px' }}
                       >
-                        🕒
+                        
                       </button>
                     )}
 
-                    <button onClick={() => handleRename(file.id, displayName)} title="Rename">✏️</button>
+                    <button onClick={() => handleRename(file.id, displayName)} title="Rename"></button>
                     {!isFolder && (
-                      <button onClick={() => handleDownload(file.id, displayName)} title="Download">⬇️</button>
+                      <button onClick={() => handleDownload(file.id, displayName)} title="Download"></button>
                     )}
-                    <button onClick={() => handleDelete(file.id)} title="Delete" style={{ background: '#d32f2f', border: 'none', color: 'white' }}>🗑️</button>
+                    <button onClick={() => handleDelete(file.id)} title="Delete" style={{ background: '#d32f2f', border: 'none', color: 'white' }}></button>
                   </div>
                 </div>
 
                 {/* --- VERSIONS SUB-LIST --- */}
                 {isExpanded && (
                   <div style={{ marginTop: '10px', padding: '10px', backgroundColor: '#222', borderRadius: '4px', borderLeft: '3px solid #FF9800' }}>
-                    <h5 style={{ margin: '0 0 10px 0', color: '#ccc' }}>📜 History for "{displayName}"</h5>
+                    <h5 style={{ margin: '0 0 10px 0', color: '#ccc' }}>History for "{displayName}"</h5>
                     
                     {loadingVersions ? (
                       <p style={{ fontSize: '0.9em', color: '#888' }}>Loading versions...</p>
@@ -316,7 +316,7 @@ v{ver.version_no} - {new Date(ver.uploaded_at).toLocaleString()}
                               onClick={() => handleDownloadVersion(file.id, ver.id, displayName)}
                               style={{ cursor: 'pointer', background: 'none', border: '1px solid #555', color: '#4CAF50', borderRadius: '4px', padding: '2px 8px', fontSize: '0.85em' }}
                             >
-                              ⬇️ Restore
+                              Restore
                             </button>
                           </li>
                         ))}
