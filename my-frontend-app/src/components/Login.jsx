@@ -1,11 +1,11 @@
 import { useState } from 'react';
+import { domain_name } from '../config'
 
 function Login({ onLoginSuccess }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [displayName, setDisplayName] = useState(''); // New field
-  
-  // Toggle between Login and Register views
+  const [displayName, setDisplayName] = useState(''); 
+
   const [isRegistering, setIsRegistering] = useState(false); 
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -16,7 +16,7 @@ function Login({ onLoginSuccess }) {
     setSuccessMsg('');
 
     try {
-        const response = await fetch('http://localhost:8000/api/v1/auth/login', { 
+        const response = await fetch(`${domain_name}/auth/login`, { 
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password }),
@@ -42,8 +42,7 @@ function Login({ onLoginSuccess }) {
     setSuccessMsg('');
 
     try {
-        // Based on your requirements: display_name, email, password
-        const response = await fetch('http://localhost:8000/api/v1/auth/register', { 
+        const response = await fetch(`${domain_name}/auth/register`, { 
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
@@ -59,8 +58,8 @@ function Login({ onLoginSuccess }) {
         }
 
         setSuccessMsg('✅ Registration successful! Please log in.');
-        setIsRegistering(false); // Switch back to login screen
-        setPassword(''); // Clear password for security
+        setIsRegistering(false);
+        setPassword(''); 
 
     } catch (err) {
         setError(err.message);
