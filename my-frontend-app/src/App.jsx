@@ -2,6 +2,7 @@ import { useState } from 'react'
 import Login from './components/Login'
 import FilesList from './components/FilesList'
 import FileUpload from './components/FileUpload'
+import { domain_name } from './config'
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(
@@ -11,29 +12,25 @@ function App() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [currentFolderId, setCurrentFolderId] = useState(null); 
 
-  // Standard local logout
   const handleLogout = () => {
     localStorage.removeItem('token');
     setIsAuthenticated(false);
     setCurrentFolderId(null);
   };
 
-  // --- NEW: LOGOUT ALL DEVICES ---
   const handleLogoutAll = async () => {
     if(!confirm("Are you sure you want to log out of ALL devices?")) return;
 
     try {
         const token = localStorage.getItem('token');
-        // Assuming endpoint is .../auth/logout/all based on your structure
-        await fetch('http://localhost:8000/api/v1/auth/logout/all', {
-            method: 'POST', // Usually POST for actions
+        await fetch(`${domain_name}/auth/logout/all`, {
+            method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`
             }
         });
     } catch (error) {
         console.error("Logout all error:", error);
-        // We log out locally even if server fails (e.g. server down)
     } finally {
         handleLogout();
         alert("Logged out from all devices.");
@@ -45,24 +42,23 @@ function App() {
   };
 
   return (
-    // OUTER CONTAINER: Full screen size, centers everything inside
     <div style={{ 
-      minHeight: '100vh', 
-      width: '100vw',              // 👈 This forces full width so horizontal centering works
-      display: 'flex', 
-      justifyContent: 'center',    // Centers Horizontally
-      alignItems: 'center',        // Centers Vertically
-      backgroundColor: '#1a1a1a',  // Dark background to match your theme
+      minHeight: '100vh',
+      width: '100vw',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: '#1a1a1a',
       color: '#333',
       margin: 0,
       padding: 0,
       boxSizing: 'border-box'
     }}>
       
-      {/* INNER WINDOW: Your actual app content */}
+     
       <div style={{ 
         width: '100%', 
-        maxWidth: '800px',         // Keeps it looking like a "window"
+        maxWidth: '800px',        
         padding: '20px',
         borderRadius: '8px'
       }}>
