@@ -33,7 +33,7 @@ function FileUpload({ onUploadSuccess, currentFolderId }) {
 
       const endpoint = isZipMode 
         ? `${domain_name}/files/zip` 
-        : `${domain_name}/files`;
+        : `${domain_name}/files/`;
 
       const response = await fetch(endpoint, {
         method: 'POST',
