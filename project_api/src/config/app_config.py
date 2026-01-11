@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     refresh_cookie_name: str = "refresh_token"
     httponly_cookie: bool = True
     secure_cookie: bool = True if MODE == "production" else False
-    samesite_cookie: str = "None" if MODE == "production" else "lax"
+    samesite_cookie: str = "none" if MODE == "production" else "lax"
 
     cookie_refresh_path: str = "/auth/refresh"
 
