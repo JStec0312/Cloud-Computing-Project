@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-
+import { domain_name } from '../config'
 const formatBytes = (bytes, decimals = 2) => {
   if (!+bytes) return '0 Bytes';
 
@@ -20,18 +20,16 @@ function FilesList({ currentFolderId, onNavigate }) {
   const [currentFolderName, setCurrentFolderName] = useState('Root');
   const [folderHistory, setFolderHistory] = useState([]); 
 
-  // --- NEW: VERSIONING STATE ---
-  const [activeVersionFileId, setActiveVersionFileId] = useState(null); // Which file is expanded?
-  const [fileVersions, setFileVersions] = useState([]); // The versions for that file
+  const [activeVersionFileId, setActiveVersionFileId] = useState(null);  
+  const [fileVersions, setFileVersions] = useState([]);
   const [loadingVersions, setLoadingVersions] = useState(false);
 
   const fetchFiles = async () => {
     setLoading(true);
-    // Reset version view when changing folders
     setActiveVersionFileId(null); 
     try {
       const token = localStorage.getItem('token');
-      let url = 'http://localhost:8000/api/v1/files';
+      let url = `${domain_name}/files`;
       if (currentFolderId) {
         url += `?folder_id=${currentFolderId}`;
       }
@@ -67,9 +65,7 @@ function FilesList({ currentFolderId, onNavigate }) {
     fetchFiles();
   }, [currentFolderId]); 
 
-  // --- NEW: FETCH VERSIONS ---
   const handleToggleVersions = async (fileId) => {
-    // If clicking the same file, close the view
     if (activeVersionFileId === fileId) {
       setActiveVersionFileId(null);
       setFileVersions([]);
@@ -81,8 +77,7 @@ function FilesList({ currentFolderId, onNavigate }) {
 
     try {
       const token = localStorage.getItem('token');
-      // Endpoint based on your screenshot
-      const response = await fetch(`http://localhost:8000/api/v1/files/${fileId}/versions`, {
+      const response = await fetch(`${domain_name}/files/${fileId}/versions`, {
         method: 'GET',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -90,7 +85,6 @@ function FilesList({ currentFolderId, onNavigate }) {
       if (!response.ok) throw new Error("Failed to fetch versions");
 
       const data = await response.json();
-      // Handle list or { items: [...] }
       const versionsList = Array.isArray(data) ? data : (data.items || []);
       setFileVersions(versionsList);
 
@@ -102,12 +96,10 @@ function FilesList({ currentFolderId, onNavigate }) {
     }
   };
 
-  // --- NEW: DOWNLOAD SPECIFIC VERSION ---
   const handleDownloadVersion = async (fileId, versionId, fileName) => {
     try {
       const token = localStorage.getItem('token');
-      // Endpoint based on your screenshot
-      const response = await fetch(`http://localhost:8000/api/v1/files/${fileId}/versions/${versionId}/download`, {
+      const response = await fetch(`${domain_name}/files/${fileId}/versions/${versionId}/download`, {
         method: 'GET',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -118,7 +110,6 @@ function FilesList({ currentFolderId, onNavigate }) {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      // Append a suffix so user knows it's a version
       a.download = `v${versionId.substring(0,4)}_${fileName}`; 
       document.body.appendChild(a);
       a.click();
@@ -130,7 +121,6 @@ function FilesList({ currentFolderId, onNavigate }) {
     }
   };
 
-  // --- NAVIGATION ---
   const handleEnterFolder = (folderId, folderName) => {
     setFolderHistory(prev => [...prev, { id: currentFolderId, name: currentFolderName }]);
     setCurrentFolderName(folderName);
@@ -149,13 +139,12 @@ function FilesList({ currentFolderId, onNavigate }) {
     onNavigate(previous.id); 
   };
 
-  // --- ACTIONS ---
   const handleRename = async (fileId, currentName) => {
     const newName = prompt("Enter new name:", currentName);
     if (!newName || newName === currentName) return;
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:8000/api/v1/files/${fileId}/rename`, {
+      const response = await fetch(`${domain_name}/files/${fileId}/rename`, {
         method: 'PATCH',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ new_name: newName }) 
@@ -168,7 +157,7 @@ function FilesList({ currentFolderId, onNavigate }) {
   const handleDownload = async (fileId, fileName) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:8000/api/v1/files/${fileId}/download`, {
+      const response = await fetch(`${domain_name}/files/${fileId}/download`, {
         method: 'GET',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -189,7 +178,7 @@ function FilesList({ currentFolderId, onNavigate }) {
     if (!confirm("Are you sure you want to delete this item?")) return;
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:8000/api/v1/files/${fileId}`, {
+      const response = await fetch(`${domain_name}/files/${fileId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -211,7 +200,7 @@ function FilesList({ currentFolderId, onNavigate }) {
   return (
     <div style={{ marginTop: '20px', color: 'white' }}> 
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-        <h3>{currentFolderId ? `📂 ${currentFolderName}` : '🏠 Root'}</h3>
+        <h3>{currentFolderId ? `${currentFolderName}` : 'Root'}</h3>
         {currentFolderId && (
           <button 
             onClick={handleGoUp}
@@ -272,22 +261,22 @@ function FilesList({ currentFolderId, onNavigate }) {
                         title="View Versions"
                         style={{ cursor: 'pointer', background: isExpanded ? '#FF9800' : 'none', border: '1px solid #555', color: isExpanded ? 'white' : '#ddd', borderRadius: '4px', padding: '5px 10px' }}
                       >
-                        🕒
+                        View Versions
                       </button>
                     )}
 
-                    <button onClick={() => handleRename(file.id, displayName)} title="Rename">✏️</button>
+                    <button onClick={() => handleRename(file.id, displayName)} title="Rename">Rename</button>
                     {!isFolder && (
-                      <button onClick={() => handleDownload(file.id, displayName)} title="Download">⬇️</button>
+                      <button onClick={() => handleDownload(file.id, displayName)} title="Download">Download</button>
                     )}
-                    <button onClick={() => handleDelete(file.id)} title="Delete" style={{ background: '#d32f2f', border: 'none', color: 'white' }}>🗑️</button>
+                    <button onClick={() => handleDelete(file.id)} title="Delete" style={{ background: '#d32f2f', border: 'none', color: 'white' }}>Delete</button>
                   </div>
                 </div>
 
                 {/* --- VERSIONS SUB-LIST --- */}
                 {isExpanded && (
                   <div style={{ marginTop: '10px', padding: '10px', backgroundColor: '#222', borderRadius: '4px', borderLeft: '3px solid #FF9800' }}>
-                    <h5 style={{ margin: '0 0 10px 0', color: '#ccc' }}>📜 History for "{displayName}"</h5>
+                    <h5 style={{ margin: '0 0 10px 0', color: '#ccc' }}>History for "{displayName}"</h5>
                     
                     {loadingVersions ? (
                       <p style={{ fontSize: '0.9em', color: '#888' }}>Loading versions...</p>
@@ -316,7 +305,7 @@ v{ver.version_no} - {new Date(ver.uploaded_at).toLocaleString()}
                               onClick={() => handleDownloadVersion(file.id, ver.id, displayName)}
                               style={{ cursor: 'pointer', background: 'none', border: '1px solid #555', color: '#4CAF50', borderRadius: '4px', padding: '2px 8px', fontSize: '0.85em' }}
                             >
-                              ⬇️ Restore
+                              Restore
                             </button>
                           </li>
                         ))}
