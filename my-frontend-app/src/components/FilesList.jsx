@@ -36,9 +36,10 @@ function FilesList({ currentFolderId, onNavigate }) {
 
       const response = await fetch(url, {
         method: 'GET',
+        credentials: 'include',
+
         headers: {
           'Authorization': `Bearer ${token}`,
-          'credentials': 'include',
           'Content-Type': 'application/json'
         }
       });
