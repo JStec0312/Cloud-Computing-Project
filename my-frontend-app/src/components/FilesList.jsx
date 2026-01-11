@@ -38,6 +38,7 @@ function FilesList({ currentFolderId, onNavigate }) {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
+          'credentials': 'include',
           'Content-Type': 'application/json'
         }
       });
@@ -78,6 +79,7 @@ function FilesList({ currentFolderId, onNavigate }) {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`${domain_name}/files/${fileId}/versions`, {
+        credentials: 'include',
         method: 'GET',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -158,6 +160,7 @@ function FilesList({ currentFolderId, onNavigate }) {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`${domain_name}/files/${fileId}/download`, {
+        credentials: 'include',
         method: 'GET',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -179,6 +182,7 @@ function FilesList({ currentFolderId, onNavigate }) {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`${domain_name}/files/${fileId}`, {
+        credentials: 'include',
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });

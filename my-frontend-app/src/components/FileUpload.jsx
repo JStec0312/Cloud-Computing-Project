@@ -37,6 +37,7 @@ function FileUpload({ onUploadSuccess, currentFolderId }) {
 
       const response = await fetch(endpoint, {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -70,6 +71,7 @@ function FileUpload({ onUploadSuccess, currentFolderId }) {
       const token = localStorage.getItem('token');
       const response = await fetch(`${domain_name}/files/folders`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

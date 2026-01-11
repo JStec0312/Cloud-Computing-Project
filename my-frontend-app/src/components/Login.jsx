@@ -17,6 +17,7 @@ function Login({ onLoginSuccess }) {
 
     try {
         const response = await fetch(`${domain_name}/auth/login`, { 
+          credentials: 'include',
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password }),
@@ -43,9 +44,11 @@ function Login({ onLoginSuccess }) {
 
     try {
         const response = await fetch(`${domain_name}/auth/register`, { 
+          credentials: 'include',
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
+
                 display_name: displayName,
                 email: email, 
                 password: password 
