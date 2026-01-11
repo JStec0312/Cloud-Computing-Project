@@ -29,7 +29,7 @@ function FilesList({ currentFolderId, onNavigate }) {
     setActiveVersionFileId(null); 
     try {
       const token = localStorage.getItem('token');
-      let url = `${domain_name}/files`;
+      let url = `${domain_name}/files/`;
       if (currentFolderId) {
         url += `?folder_id=${currentFolderId}`;
       }
