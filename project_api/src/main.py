@@ -21,6 +21,7 @@ origins = [
     "http://localhost:5173", # Vite (React) default port
     "http://localhost:3000", # Create React App default port
     "http://localhost:8000",
+    "https://frontend-production-6ee7.up.railway.app", # Deployed frontend URL
 ]
 
 app.add_middleware(

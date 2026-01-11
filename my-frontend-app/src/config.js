@@ -1,1 +1,1 @@
-export const domain_name = "http://localhost:8000/api/v1";
+export const domain_name = "https://frontend-production-6ee7.up.railway.app/api/v1";

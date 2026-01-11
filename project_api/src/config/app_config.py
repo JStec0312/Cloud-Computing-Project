@@ -2,6 +2,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 from typing import Optional
 import os
+MODE = "production"
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", case_sensitive=False)
     db_user: str 
@@ -28,8 +29,8 @@ class Settings(BaseSettings):
     #cookies
     refresh_cookie_name: str = "refresh_token"
     httponly_cookie: bool = True
-    secure_cookie: bool = False
-    samesite_cookie: str = "Lax"
+    secure_cookie: bool = True if MODE == "production" else False
+    samesite_cookie: str = "None" if MODE == "production" else "lax"
 
     cookie_refresh_path: str = "/auth/refresh"
 
