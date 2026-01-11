@@ -43,9 +43,9 @@ function FilesList({ currentFolderId, onNavigate }) {
           'Content-Type': 'application/json'
         }
       });
+      console.log("Fetch response:", response);
 
       if (!response.ok) throw new Error(`Error ${response.status}: ${await response.text()}`);
-
       const data = await response.json();
       
       if (Array.isArray(data)) {
